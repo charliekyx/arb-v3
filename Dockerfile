@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/
 
 # Copy the binary
 # 注意：源文件是 rust-arbitrage-searcher，我们将它重命名为 bot 方便运行
-COPY --from=builder /usr/src/app/target/release/rust-arbitrage-searcher_v3 /app/bot
+COPY --from=builder /usr/src/app/target/release/rust-arbitrage-searcher_v3 /app/bot_v3
 
 # Use a non-root user
 RUN useradd -m mevuser
