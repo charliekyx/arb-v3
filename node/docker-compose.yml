@@ -1,0 +1,61 @@
+services:
+  execution:
+    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:latest
+    restart: always
+    stop_grace_period: 3m
+    ports:
+      - 8545:8545
+      - 8546:8546
+      - 30303:30303
+      - 30303:30303/udp
+    volumes:
+      - ./data/geth:/db
+      - ./jwt.hex:/jwt.hex:ro
+    command:
+      - --datadir=/db
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.vhosts=*
+      - --http.corsdomain=*
+      - --http.api=web3,debug,eth,txpool,net,engine,admin
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.api=debug,eth,txpool,net,engine
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.vhosts=*
+      - --authrpc.jwtsecret=/jwt.hex
+      - --syncmode=snap
+      - --gcmode=full
+      - --maxpeers=100
+      - --networkid=8453
+      - --op-network=base-mainnet
+      - --state.scheme=path
+      - --db.engine=pebble
+
+  consensus:
+    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:latest
+    restart: always
+    stop_grace_period: 3m
+    ports:
+      - 9222:9222
+      - 9003:9003/udp
+      - 9003:9003/tcp
+    volumes:
+      - ./jwt.hex:/jwt.hex:ro
+    command:
+      - op-node
+      - --network=base-mainnet
+      - --l1=https://eth-mainnet.g.alchemy.com/v2/ndY7QeJdjHKDPr2xfuGDZ
+      - --l1.beacon=https://ethereum-beacon-api.publicnode.com
+      - --l2=http://execution:8551
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --l2.jwt-secret=/jwt.hex
+      - --l1.trustrpc
+      - --l1.rpckind=alchemy
+      - --l1.max-concurrency=5
+      - --l1.rpc-max-batch-size=10
+      - --syncmode=execution-layer
