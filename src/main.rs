@@ -275,7 +275,7 @@ async fn main() -> Result<()> {
                 }
             } else {
                 info!("🧊 [LOSS] {} -> {}", pa.name, pb.name);
-                info!("   📉 亏损: -{} ETH (手续费太高)", format_ether(loss));
+                info!("   📉 亏损: ETH (手续费太高)");
             }
         }
     }
