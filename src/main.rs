@@ -175,6 +175,7 @@ async fn main() -> Result<()> {
             }
         };
         let current_bn = block.number.unwrap();
+        info!("cur blocks {current_bn}");
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached. Stopping.");
