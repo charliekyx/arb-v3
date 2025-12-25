@@ -1,14 +1,22 @@
 [
     {
-        "name": "Aerodrome_Slipstream_BRETT_WETH",
+        "name": "Aerodrome_Slipstream_BRETT_WETH_1%",
         "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
         "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 200
+        "fee": 10000
     },
     {
-        "name": "UniswapV3_BRETT_WETH",
+        "name": "Aerodrome_Slipstream_BRETT_WETH_0.3%",
+        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
+        "fee": 3000
+    },
+    {
+        "name": "UniswapV3_BRETT_WETH_1%",
         "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
@@ -16,67 +24,27 @@
         "fee": 10000
     },
     {
-        "name": "Aerodrome_Slipstream_TOSHI_WETH",
-        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 200
-    },
-    {
-        "name": "UniswapV3_TOSHI_WETH",
-        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "name": "UniswapV3_BRETT_WETH_0.3%",
+        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000
+        "fee": 3000
     },
     {
-        "name": "Aerodrome_Slipstream_DEGEN_WETH",
+        "name": "Aerodrome_Slipstream_DEGEN_WETH_1%",
         "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
         "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 200
+        "fee": 10000
     },
     {
-        "name": "UniswapV3_DEGEN_WETH",
+        "name": "UniswapV3_DEGEN_WETH_0.3%",
         "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000
-    },
-    {
-        "name": "Aerodrome_Slipstream_KEYCAT_WETH",
-        "token_a": "0x9a26F5433671751C3276a065f57e5a02D2817973",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 200
-    },
-    {
-        "name": "UniswapV3_KEYCAT_WETH",
-        "token_a": "0x9a26F5433671751C3276a065f57e5a02D2817973",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000
-    },
-    {
-        "name": "Aerodrome_Slipstream_MIGGLES_WETH",
-        "token_a": "0xB1a03Eda10342529bBF8EB700a06C60441fEf25d",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 200
-    },
-    {
-        "name": "UniswapV3_MIGGLES_WETH",
-        "token_a": "0xB1a03Eda10342529bBF8EB700a06C60441fEf25d",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000
+        "fee": 3000
     }
 ]
