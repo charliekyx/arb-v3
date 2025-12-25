@@ -47,4 +47,4 @@ RUN useradd -m mevuser
 USER mevuser
 
 # Run the binary
-CMD ["./bot"]
+CMD ["./bot_v3"]
