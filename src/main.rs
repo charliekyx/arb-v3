@@ -40,6 +40,7 @@ struct JsonPoolInput {
     router: String,
     quoter: String,
     fee: u32,
+    quoter_type: Option<String>, // 新增: "v1" or "v2" (默认 v2)
 }
 
 #[derive(Clone, Debug)]
@@ -49,6 +50,7 @@ struct PoolConfig {
     quoter: Address,
     fee: u32,
     token_other: Address,
+    quoter_type: String,
 }
 
 // --- ABI Definitions ---
@@ -59,10 +61,17 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
+    // Uniswap V3 Quoter V2 (使用结构体)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+    ]"#;
+
+    // Aerodrome / Uniswap V3 Quoter V1 (使用扁平参数)
+    IQuoterV1,
+    r#"[
+        function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
     ]"#
 );
 
@@ -123,13 +132,63 @@ impl NonceManager {
     }
 }
 
+// 辅助函数：执行询价，自动区分 V1/V2
+async fn quote_pool(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    pool: &PoolConfig,
+    amount_in: U256,
+    weth: Address,
+) -> Result<U256> {
+    let token_in = if pool.token_other == weth {
+        pool.token_other
+    } else {
+        weth
+    }; // 逻辑反了？
+       // 修正: 我们想知道 WETH -> Token 能换多少，或者 Token -> WETH 能换多少
+       // 这里传入的 pool.token_other 是非 WETH 的那个币
+       // 如果我们要卖 WETH 买 Token: In=WETH, Out=Token
+       // 如果我们要卖 Token 买 WETH: In=Token, Out=WETH
+
+    // 简单起见，我们在 main loop 里显式指定 token_in/out，这里只负责发请求
+    // 所以这个函数签名改一下，直接传 in/out
+    Err(anyhow!("Use quote_specific instead"))
+}
+
+async fn quote_specific(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    pool: &PoolConfig,
+    token_in: Address,
+    token_out: Address,
+    amount: U256,
+) -> Result<U256> {
+    if pool.quoter_type == "v1" {
+        let quoter = IQuoterV1::new(pool.quoter, client);
+        let amount_out = quoter
+            .quote_exact_input_single(token_in, token_out, pool.fee, amount, U256::zero())
+            .call()
+            .await?;
+        Ok(amount_out)
+    } else {
+        let quoter = IQuoterV2::new(pool.quoter, client);
+        let params = QuoteParams {
+            token_in,
+            token_out,
+            amount_in: amount,
+            fee: pool.fee,
+            sqrt_price_limit_x96: U256::zero(),
+        };
+        let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
+        Ok(amount_out)
+    }
+}
+
 // --- Main Entry ---
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 DEBUG Bot");
-    info!("🐞 Mode: Printing ALL errors to find why quoter fails");
+    info!("🚀 System Starting: Base V3 HYBRID Bot (V1 & V2 Support)");
+    info!("💾 模式: 记录所有盈利机会至 opportunities.txt");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -152,12 +211,16 @@ async fn main() -> Result<()> {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
+        // 默认为 v2，如果配置写了 v1 则用 v1
+        let q_type = cfg.quoter_type.unwrap_or_else(|| "v2".to_string());
+
         pools.push(PoolConfig {
             name: cfg.name,
             router: Address::from_str(&cfg.router)?,
             quoter: Address::from_str(&cfg.quoter)?,
             fee: cfg.fee,
             token_other,
+            quoter_type: q_type,
         });
     }
     info!("✅ Loaded {} V3 Pools.", pools.len());
@@ -175,12 +238,13 @@ async fn main() -> Result<()> {
             }
         };
         let current_bn = block.number.unwrap();
-        info!("Processing Block: {}", current_bn);
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached. Stopping.");
             break;
         }
+
+        // --- Concurrent Logic ---
 
         let mut candidates = Vec::new();
         for i in 0..pools.len() {
@@ -189,6 +253,7 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
+                // 必须是同一种币
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -202,42 +267,34 @@ async fn main() -> Result<()> {
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A: Pool A
-                let quoter_a = IQuoterV2::new(pa.quoter, client_ref.clone());
-                let params_a = QuoteParams {
-                    token_in: weth_addr_parsed,
-                    token_out: pa.token_other,
-                    amount_in: borrow_amount,
-                    fee: pa.fee,
-                    sqrt_price_limit_x96: U256::zero(),
+                // Step A: WETH -> Token (Pool A)
+                // 卖出 WETH, 买入 Token
+                let out_token = match quote_specific(
+                    client_ref.clone(),
+                    &pa,
+                    weth_addr_parsed,
+                    pa.token_other,
+                    borrow_amount,
+                )
+                .await
+                {
+                    Ok(amt) => amt,
+                    Err(_) => return None, // 失败静默跳过 (或者可以加日志调试)
                 };
 
-                let out_token = match quoter_a.quote_exact_input_single(params_a).call().await {
-                    Ok((amt, _, _, _)) => amt,
-                    Err(e) => {
-                        // 🛑 关键：打印错误原因！
-                        warn!("❌ Quoter A Fail [{}]: {:?}", pa.name, e);
-                        return None;
-                    }
-                };
-
-                // Step B: Pool B
-                let quoter_b = IQuoterV2::new(pb.quoter, client_ref.clone());
-                let params_b = QuoteParams {
-                    token_in: pa.token_other,
-                    token_out: weth_addr_parsed,
-                    amount_in: out_token,
-                    fee: pb.fee,
-                    sqrt_price_limit_x96: U256::zero(),
-                };
-
-                let out_eth = match quoter_b.quote_exact_input_single(params_b).call().await {
-                    Ok((amt, _, _, _)) => amt,
-                    Err(e) => {
-                        // 🛑 关键：打印错误原因！
-                        warn!("❌ Quoter B Fail [{}]: {:?}", pb.name, e);
-                        return None;
-                    }
+                // Step B: Token -> WETH (Pool B)
+                // 卖出 Token, 买入 WETH
+                let out_eth = match quote_specific(
+                    client_ref.clone(),
+                    &pb,
+                    pa.token_other,
+                    weth_addr_parsed,
+                    out_token,
+                )
+                .await
+                {
+                    Ok(amt) => amt,
+                    Err(_) => return None,
                 };
 
                 Some((pa, pb, out_eth))
@@ -246,22 +303,46 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>()
             .await;
 
-        // 打印结果
-        let mut count = 0;
+        // 4. 处理结果
+        let mut profit_count = 0;
         for (pa, pb, out_eth) in results.into_iter().flatten() {
-            count += 1;
-            let profit = out_eth.as_u128() as i128 - borrow_amount.as_u128() as i128;
-            if profit > 0 {
-                info!(
-                    "🔥 PROFIT: {} -> {} | Net: {} WEI",
-                    pa.name, pb.name, profit
+            // 只看赚钱的
+            if out_eth > borrow_amount {
+                profit_count += 1;
+                let profit = out_eth - borrow_amount;
+                let profit_eth = format_ether(profit);
+                let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+                let gas_cost = parse_ether("0.00015").unwrap();
+                let net_status = if profit > gas_cost {
+                    "🔥[高利]"
+                } else {
+                    "❄️[微利]"
+                };
+
+                let log_msg = format!(
+                    "[{}] Block: {} | {} | {} -> {} | Profit: {} ETH",
+                    timestamp, current_bn, net_status, pa.name, pb.name, profit_eth
                 );
-            } else {
-                info!("🧊 LOSS: {} -> {} | Loss: {} WEI", pa.name, pb.name, profit);
+
+                info!("{}", log_msg);
+
+                // 写入文件
+                if let Ok(mut file) = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("opportunities.txt")
+                {
+                    let _ = writeln!(file, "{}", log_msg);
+                }
             }
         }
-        if count == 0 {
-            warn!("⚠️ No results this block. Check Quoter errors above!");
+
+        if profit_count > 0 {
+            info!(
+                "--- Block {} Found {} opportunities ---",
+                current_bn, profit_count
+            );
         }
     }
     Ok(())
