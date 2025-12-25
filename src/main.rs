@@ -191,9 +191,12 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
+
                 if pa.token_other != pb.token_other {
                     continue;
                 }
+
+                info!("{} and {} added to candidates", pa.name, pb.name);
                 candidates.push((pa.clone(), pb.clone()));
             }
         }
