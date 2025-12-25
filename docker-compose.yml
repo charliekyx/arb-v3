@@ -1,9 +1,9 @@
-name: arbitrage-bot-prod
+name: arbitrage-bot-prod-v3
 
 services:
   bot:
     build: .
-    container_name: rust-arb-bot
+    container_name: rust-arb-bot-v3
     restart: unless-stopped
 
     # 你的代码逻辑会读取环境变量 CONFIG_PASS 来解密配置

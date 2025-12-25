@@ -1,8 +1,8 @@
 [package]
-name = "rust-arbitrage-searcher"
+name = "rust-arbitrage-searcher_v3"
 version = "0.1.0"
 edition = "2021"
-default-run = "rust-arbitrage-searcher"
+default-run = "rust-arbitrage-searcher_v3"
 
 [dependencies]
 ethers = { version = "2.0", features = ["ipc", "ws", "abigen", "rustls"] }

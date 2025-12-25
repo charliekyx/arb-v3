@@ -18,7 +18,7 @@ RUN cargo build --release
 
 # 3. 删除假构建产物
 # 注意：Cargo 在 deps 目录里通常把横杠转为下划线，所以这里用 rust_arbitrage_searcher*
-RUN rm -f target/release/deps/rust_arbitrage_searcher*
+RUN rm -f target/release/deps/rust_arbitrage_searcher_v3*
 # --- Caching Trick End ---
 
 # 4. 复制真正的源码
@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/
 
 # Copy the binary
 # 注意：源文件是 rust-arbitrage-searcher，我们将它重命名为 bot 方便运行
-COPY --from=builder /usr/src/app/target/release/rust-arbitrage-searcher /app/bot
+COPY --from=builder /usr/src/app/target/release/rust-arbitrage-searcher_v3 /app/bot
 
 # Use a non-root user
 RUN useradd -m mevuser

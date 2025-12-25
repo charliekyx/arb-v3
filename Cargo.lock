@@ -2824,7 +2824,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-arbitrage-searcher"
+name = "rust-arbitrage-searcher_v3"
 version = "0.1.0"
 dependencies = [
  "anyhow",
