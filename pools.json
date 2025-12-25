@@ -36,21 +36,12 @@
         "quoter_type": "v2"
     },
     {
-        "name": "Aerodrome_BRETT_1%",
+        "name": "Uniswap_BRETT_1%",
         "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 10000,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Aerodrome_BRETT_0.3%",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 3000,
         "quoter_type": "v2"
     },
     {
@@ -63,21 +54,30 @@
         "quoter_type": "v2"
     },
     {
-        "name": "Aerodrome_DEGEN_0.3%",
+        "name": "Aerodrome_DEGEN_0.25%",
         "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
         "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 3000,
+        "fee": 2500,
         "quoter_type": "v2"
     },
     {
-        "name": "Uniswap_BRETT_1%",
+        "name": "Aerodrome_BRETT_1%",
         "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
         "fee": 10000,
+        "quoter_type": "v2"
+    },
+    {
+        "name": "Aerodrome_BRETT_0.25%",
+        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
+        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
+        "fee": 2500,
         "quoter_type": "v2"
     }
 ]
