@@ -1,60 +1,6 @@
 [
     {
-        "name": "Uniswap_BRETT_3000",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Uniswap_BRETT_10000",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Aerodrome_BRETT_100",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 100,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Aerodrome_BRETT_500",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 500,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Aerodrome_BRETT_3000",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 3000,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Aerodrome_BRETT_10000",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 10000,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Uniswap_DEGEN_3000",
+        "name": "Uniswap_DEGEN_0.3%",
         "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
@@ -63,7 +9,7 @@
         "quoter_type": "v2"
     },
     {
-        "name": "Uniswap_DEGEN_10000",
+        "name": "Uniswap_DEGEN_1%",
         "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
@@ -72,39 +18,21 @@
         "quoter_type": "v2"
     },
     {
-        "name": "Aerodrome_DEGEN_100",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "name": "Uniswap_TOSHI_0.3%",
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 100,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Aerodrome_DEGEN_500",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 500,
-        "quoter_type": "v1"
-    },
-    {
-        "name": "Aerodrome_DEGEN_3000",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
-        "quoter_type": "v1"
+        "quoter_type": "v2"
     },
     {
-        "name": "Aerodrome_DEGEN_10000",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "name": "Uniswap_TOSHI_1%",
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 10000,
-        "quoter_type": "v1"
+        "quoter_type": "v2"
     }
 ]
