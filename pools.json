@@ -45,39 +45,12 @@
         "quoter_type": "v2"
     },
     {
-        "name": "Aerodrome_DEGEN_1%",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "name": "Aerodrome_Slipstream_USDC_WETH_0.05%",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
         "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 10000,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Aerodrome_DEGEN_0.25%",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 2500,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Aerodrome_BRETT_1%",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 10000,
-        "quoter_type": "v2"
-    },
-    {
-        "name": "Aerodrome_BRETT_0.25%",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xbe6D8f0d05cC4be24d5167a3eF062215bE6D18a5",
-        "quoter": "0x254cF9E1E6e233aa1Ac962cB9B05b2cfEaaE15b0",
-        "fee": 2500,
+        "fee": 500,
         "quoter_type": "v2"
     }
 ]
