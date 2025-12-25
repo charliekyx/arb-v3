@@ -40,7 +40,7 @@ struct JsonPoolInput {
     router: String,
     quoter: String,
     fee: u32,
-    quoter_type: Option<String>, // 新增: "v1" or "v2" (默认 v2)
+    quoter_type: Option<String>, // "v1" or "v2"
 }
 
 #[derive(Clone, Debug)]
@@ -61,14 +61,14 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
-    // Uniswap V3 Quoter V2 (使用结构体)
+    // Uniswap V3 Quoter V2 (结构体参数)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome / Uniswap V3 Quoter V1 (使用扁平参数)
+    // Aerodrome / Quoter V1 (扁平参数)
     IQuoterV1,
     r#"[
         function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
@@ -132,28 +132,7 @@ impl NonceManager {
     }
 }
 
-// 辅助函数：执行询价，自动区分 V1/V2
-async fn quote_pool(
-    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
-    pool: &PoolConfig,
-    amount_in: U256,
-    weth: Address,
-) -> Result<U256> {
-    let token_in = if pool.token_other == weth {
-        pool.token_other
-    } else {
-        weth
-    }; // 逻辑反了？
-       // 修正: 我们想知道 WETH -> Token 能换多少，或者 Token -> WETH 能换多少
-       // 这里传入的 pool.token_other 是非 WETH 的那个币
-       // 如果我们要卖 WETH 买 Token: In=WETH, Out=Token
-       // 如果我们要卖 Token 买 WETH: In=Token, Out=WETH
-
-    // 简单起见，我们在 main loop 里显式指定 token_in/out，这里只负责发请求
-    // 所以这个函数签名改一下，直接传 in/out
-    Err(anyhow!("Use quote_specific instead"))
-}
-
+// 核心：通用询价函数
 async fn quote_specific(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -162,6 +141,7 @@ async fn quote_specific(
     amount: U256,
 ) -> Result<U256> {
     if pool.quoter_type == "v1" {
+        // Aerodrome Logic
         let quoter = IQuoterV1::new(pool.quoter, client);
         let amount_out = quoter
             .quote_exact_input_single(token_in, token_out, pool.fee, amount, U256::zero())
@@ -169,6 +149,7 @@ async fn quote_specific(
             .await?;
         Ok(amount_out)
     } else {
+        // Uniswap Logic
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -187,8 +168,8 @@ async fn quote_specific(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 HYBRID Bot (V1 & V2 Support)");
-    info!("💾 模式: 记录所有盈利机会至 opportunities.txt");
+    info!("🚀 System Starting: Base V3 HYBRID Bot (Verbose Mode)");
+    info!("🗣️ 模式: 打印一切结果 (V1 & V2 兼容版)");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -211,7 +192,7 @@ async fn main() -> Result<()> {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
-        // 默认为 v2，如果配置写了 v1 则用 v1
+        // 默认用 v2，如果 json 写了 v1 就用 v1
         let q_type = cfg.quoter_type.unwrap_or_else(|| "v2".to_string());
 
         pools.push(PoolConfig {
@@ -253,7 +234,6 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
-                // 必须是同一种币
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -267,8 +247,7 @@ async fn main() -> Result<()> {
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A: WETH -> Token (Pool A)
-                // 卖出 WETH, 买入 Token
+                // Step A: WETH -> Token
                 let out_token = match quote_specific(
                     client_ref.clone(),
                     &pa,
@@ -279,11 +258,14 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_) => return None, // 失败静默跳过 (或者可以加日志调试)
+                    Err(e) => {
+                        // 打印错误，方便排查哪个池子配置还在报错
+                        warn!("⚠️ Step A Fail [{}]: {:?}", pa.name, e);
+                        return None;
+                    }
                 };
 
-                // Step B: Token -> WETH (Pool B)
-                // 卖出 Token, 买入 WETH
+                // Step B: Token -> WETH
                 let out_eth = match quote_specific(
                     client_ref.clone(),
                     &pb,
@@ -294,7 +276,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_) => return None,
+                    Err(e) => {
+                        warn!("⚠️ Step B Fail [{}]: {:?}", pb.name, e);
+                        return None;
+                    }
                 };
 
                 Some((pa, pb, out_eth))
@@ -303,16 +288,14 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>()
             .await;
 
-        // 4. 处理结果
-        let mut profit_count = 0;
+        // 4. 处理结果 (话痨模式)
+        info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
-            // 只看赚钱的
             if out_eth > borrow_amount {
-                profit_count += 1;
+                // 赚钱
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
                 let gas_cost = parse_ether("0.00015").unwrap();
                 let net_status = if profit > gas_cost {
                     "🔥[高利]"
@@ -321,10 +304,9 @@ async fn main() -> Result<()> {
                 };
 
                 let log_msg = format!(
-                    "[{}] Block: {} | {} | {} -> {} | Profit: {} ETH",
-                    timestamp, current_bn, net_status, pa.name, pb.name, profit_eth
+                    "[{}] {} -> {} | Profit: {} ETH ({})",
+                    timestamp, pa.name, pb.name, profit_eth, net_status
                 );
-
                 info!("{}", log_msg);
 
                 // 写入文件
@@ -335,15 +317,18 @@ async fn main() -> Result<()> {
                 {
                     let _ = writeln!(file, "{}", log_msg);
                 }
+            } else {
+                // 亏钱 (现在也打印出来！)
+                let loss = borrow_amount - out_eth;
+                info!(
+                    "🧊 LOSS: {} -> {} | -{} ETH",
+                    pa.name,
+                    pb.name,
+                    format_ether(loss)
+                );
             }
         }
-
-        if profit_count > 0 {
-            info!(
-                "--- Block {} Found {} opportunities ---",
-                current_bn, profit_count
-            );
-        }
+        info!("-----------------------");
     }
     Ok(())
 }
