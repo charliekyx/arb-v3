@@ -10,8 +10,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File, OpenOptions}, // 引入 OpenOptions 用于追加写入
-    io::Write,                     // 引入 Write trait
+    fs::{self, File, OpenOptions},
+    io::Write,
     str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -128,8 +128,8 @@ impl NonceManager {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 Recorder Bot");
-    info!("💾 模式: 赚钱机会将被记录到 opportunities.txt");
+    info!("🚀 System Starting: Base V3 DEBUG Bot");
+    info!("🐞 Mode: Printing ALL errors to find why quoter fails");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -175,14 +175,12 @@ async fn main() -> Result<()> {
             }
         };
         let current_bn = block.number.unwrap();
-        info!("cur blocks {current_bn}");
+        info!("Processing Block: {}", current_bn);
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached. Stopping.");
             break;
         }
-
-        // --- Concurrent Logic ---
 
         let mut candidates = Vec::new();
         for i in 0..pools.len() {
@@ -191,12 +189,9 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
-
                 if pa.token_other != pb.token_other {
                     continue;
                 }
-
-                info!("{} and {} added to candidates", pa.name, pb.name);
                 candidates.push((pa.clone(), pb.clone()));
             }
         }
@@ -207,7 +202,7 @@ async fn main() -> Result<()> {
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A
+                // Step A: Pool A
                 let quoter_a = IQuoterV2::new(pa.quoter, client_ref.clone());
                 let params_a = QuoteParams {
                     token_in: weth_addr_parsed,
@@ -219,10 +214,14 @@ async fn main() -> Result<()> {
 
                 let out_token = match quoter_a.quote_exact_input_single(params_a).call().await {
                     Ok((amt, _, _, _)) => amt,
-                    Err(_) => return None,
+                    Err(e) => {
+                        // 🛑 关键：打印错误原因！
+                        warn!("❌ Quoter A Fail [{}]: {:?}", pa.name, e);
+                        return None;
+                    }
                 };
 
-                // Step B
+                // Step B: Pool B
                 let quoter_b = IQuoterV2::new(pb.quoter, client_ref.clone());
                 let params_b = QuoteParams {
                     token_in: pa.token_other,
@@ -234,7 +233,11 @@ async fn main() -> Result<()> {
 
                 let out_eth = match quoter_b.quote_exact_input_single(params_b).call().await {
                     Ok((amt, _, _, _)) => amt,
-                    Err(_) => return None,
+                    Err(e) => {
+                        // 🛑 关键：打印错误原因！
+                        warn!("❌ Quoter B Fail [{}]: {:?}", pb.name, e);
+                        return None;
+                    }
                 };
 
                 Some((pa, pb, out_eth))
@@ -243,44 +246,22 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>()
             .await;
 
-        // 4. 处理结果并记录
+        // 打印结果
+        let mut count = 0;
         for (pa, pb, out_eth) in results.into_iter().flatten() {
-            if out_eth > borrow_amount {
-                // 发现赚钱机会 (毛利 > 0)
-                let profit = out_eth - borrow_amount;
-                let profit_eth = format_ether(profit);
-                let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
-                // 估算是否能覆盖 Gas (假设 Gas 成本 0.00015 ETH)
-                let gas_cost = parse_ether("0.00015").unwrap();
-                let net_status = if profit > gas_cost {
-                    "🔥[高利]"
-                } else {
-                    "❄️[微利]"
-                };
-
-                let log_msg = format!(
-                    "[{}] Block: {} | Type: {} | {} -> {} | Profit: {} ETH\n",
-                    timestamp, current_bn, net_status, pa.name, pb.name, profit_eth
+            count += 1;
+            let profit = out_eth.as_u128() as i128 - borrow_amount.as_u128() as i128;
+            if profit > 0 {
+                info!(
+                    "🔥 PROFIT: {} -> {} | Net: {} WEI",
+                    pa.name, pb.name, profit
                 );
-
-                // 打印到控制台
-                info!("{}", log_msg.trim());
-
-                // 写入文件
-                if let Ok(mut file) = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("opportunities.txt")
-                {
-                    if let Err(e) = file.write_all(log_msg.as_bytes()) {
-                        error!("Failed to write to file: {:?}", e);
-                    }
-                }
             } else {
-                info!("🧊 [LOSS] {} -> {}", pa.name, pb.name);
-                info!("   📉 亏损: ETH (手续费太高)");
+                info!("🧊 LOSS: {} -> {} | Loss: {} WEI", pa.name, pb.name, profit);
             }
+        }
+        if count == 0 {
+            warn!("⚠️ No results this block. Check Quoter errors above!");
         }
     }
     Ok(())
