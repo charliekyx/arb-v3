@@ -1,10 +1,10 @@
-// src/bin/setup_config.rs
 use cocoon::Cocoon;
 use rpassword::read_password;
 use serde::Serialize;
 use std::fs::File;
 use std::io::prelude::*;
 
+// 必须与 main.rs 中的 AppConfig 结构保持字段一致
 #[derive(Serialize, serde::Deserialize, Debug)]
 struct AppConfig {
     private_key: String,
@@ -31,14 +31,18 @@ fn prompt_hidden(label: &str) -> String {
 
 fn main() {
     println!("=== MEV Bot Secure Config Generator ===");
-    println!("This tool will encrypt your secrets into a file.");
+    println!("此工具将把你的私钥和配置加密保存为 'mev_bot.secure' 文件。");
 
-    let private_key = prompt_hidden("Enter Private Key (will be hidden)");
-    let ipc_path = prompt("Enter IPC Path (e.g., /var/lib/reth/reth.ipc)");
-    let contract_address = prompt("Enter FlashLoan Contract Address");
-    let smtp_username = prompt("Enter SMTP Username (Gmail)");
-    let smtp_password = prompt_hidden("Enter SMTP Password");
-    let my_email = prompt("Enter Recipient Email");
+    // 1. 收集敏感信息
+    let private_key = prompt_hidden("请输入 Bot 私钥 (输入时不可见)");
+    let ipc_path = prompt("请输入 IPC 路径 (例如 /app/geth_data/geth.ipc)");
+    let contract_address = prompt("请输入刚才部署的合约地址 (0x...)");
+
+    // 为了兼容性保留 SMTP 字段，如果你不发邮件，可以直接回车跳过
+    println!("(以下邮件配置可选，如果不使用请直接回车)");
+    let smtp_username = prompt("SMTP 用户名");
+    let smtp_password = prompt_hidden("SMTP 密码");
+    let my_email = prompt("接收通知的邮箱");
 
     let config = AppConfig {
         private_key,
@@ -49,25 +53,32 @@ fn main() {
         my_email,
     };
 
-    println!("\nNow set a strong password to encrypt this file.");
-    println!("You will need to provide this password when starting the bot.");
-    let password = prompt_hidden("Encryption Password");
-    let confirm = prompt_hidden("Confirm Password");
+    println!("\n--------------------------------------------------");
+    println!("现在设置一个【强密码】来加密这个配置文件。");
+    println!("每次启动 Bot 时，你都需要通过环境变量 CONFIG_PASS 提供这个密码。");
+
+    let password = prompt_hidden("设置加密密码");
+    let confirm = prompt_hidden("确认加密密码");
 
     if password != confirm {
-        eprintln!("Passwords do not match!");
+        eprintln!("❌ 两次输入的密码不一致！程序退出。");
         std::process::exit(1);
     }
 
+    // 2. 加密并保存
     let mut cocoon = Cocoon::new(password.as_bytes());
     let mut file = File::create("mev_bot.secure").unwrap();
 
-    // 1. 先把结构体序列化成字节
+    // 序列化结构体 -> 字节 -> 加密写入
     let config_bytes = serde_json::to_vec(&config).expect("Failed to serialize config");
 
-    // 2. 把字节传给 dump
     match cocoon.dump(config_bytes, &mut file) {
-        Ok(_) => println!("\n[SUCCESS] Encrypted config saved to 'mev_bot.secure'."),
-        Err(e) => println!("\n[ERROR] Failed to save config: {:?}", e),
+        Ok(_) => {
+            println!("\n✅ 成功！加密配置文件已保存为 'mev_bot.secure'。");
+            println!(
+                "下一步：在 docker-compose.yml 或 .env 中设置 CONFIG_PASS=你的密码 即可启动。"
+            );
+        }
+        Err(e) => println!("\n❌ 错误：保存文件失败: {:?}", e),
     }
 }

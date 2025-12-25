@@ -3,7 +3,7 @@ use chrono::Local;
 use cocoon::Cocoon;
 use ethers::{
     prelude::*,
-    types::{Address, Eip1559TransactionRequest, U256},
+    types::{Address, U256},
     utils::{format_ether, parse_ether, parse_units},
 };
 use futures::stream::{self, StreamExt};
@@ -26,7 +26,7 @@ struct AppConfig {
     private_key: String,
     ipc_path: String,
     contract_address: String,
-    // 保留字段定义以兼容配置文件，但代码中不使用
+    // 保留字段以兼容配置文件
     smtp_username: String,
     smtp_password: String,
     my_email: String,
@@ -35,6 +35,7 @@ struct AppConfig {
 #[derive(Debug, Deserialize, Clone)]
 struct JsonPoolInput {
     name: String,
+    // token_a/b 仅用于配置文件读取，转换到 PoolConfig 后不再存储
     token_a: String,
     token_b: String,
     router: String,
@@ -51,7 +52,7 @@ struct PoolConfig {
     token_other: Address,
 }
 
-// --- ABI ---
+// --- ABI Definitions ---
 abigen!(
     FlashLoanExecutor,
     r#"[
@@ -121,25 +122,20 @@ impl NonceManager {
             address,
         })
     }
+    // 观察模式不需要发送交易，保留此函数以防后续切回交易模式
+    #[allow(dead_code)]
     fn get_next(&self) -> U256 {
         U256::from(self.nonce.fetch_add(1, Ordering::SeqCst))
     }
-    async fn sync_from_chain(&self) -> Result<()> {
-        let on_chain = self
-            .provider
-            .get_transaction_count(self.address, None)
-            .await?;
-        self.nonce.store(on_chain.as_u64(), Ordering::SeqCst);
-        Ok(())
-    }
 }
 
-// --- Main ---
+// --- Main Entry ---
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 Concurrent Bot (Clean Version)");
+    info!("🚀 System Starting: Base V3 Observation Bot (Dry Run)");
+    info!("👀 模式: 只观察不交易，打印所有微利机会");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -148,10 +144,10 @@ async fn main() -> Result<()> {
     let my_addr = wallet.address();
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
 
-    let contract_addr: Address = config.contract_address.parse()?;
-    let executor_contract = FlashLoanExecutor::new(contract_addr, client.clone());
+    // 即使不发交易，加载这些结构也没坏处
+    let _contract_addr: Address = config.contract_address.parse()?;
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
-    let nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
+    let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
 
     // 2. Load Pools
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
@@ -178,7 +174,6 @@ async fn main() -> Result<()> {
     info!("Waiting for blocks...");
 
     loop {
-        // 使用 _block 消除未使用变量警告
         let _block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
             _ => {
@@ -192,9 +187,9 @@ async fn main() -> Result<()> {
             break;
         }
 
-        // --- Concurrent Logic Start ---
+        // --- Concurrent Observation Logic ---
 
-        // 1. 生成候选列表 (只做两两配对，O(N^2))
+        // 1. 生成候选列表 (两两配对)
         let mut candidates = Vec::new();
         for i in 0..pools.len() {
             for j in 0..pools.len() {
@@ -209,7 +204,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        let borrow_amount = parse_ether("0.1").unwrap();
+        let borrow_amount = parse_ether("0.1").unwrap(); // 模拟 0.1 ETH
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
@@ -246,69 +241,36 @@ async fn main() -> Result<()> {
                     Err(_) => return None,
                 };
 
-                if out_eth > borrow_amount {
-                    Some((pa, pb, out_eth - borrow_amount))
-                } else {
-                    None
-                }
+                Some((pa, pb, out_eth))
             })
-            .buffer_unordered(30)
+            .buffer_unordered(30) // 并发度 30
             .collect::<Vec<_>>()
             .await;
 
-        // 3. 处理结果 & 发送交易
-        // 🌟 修正：使用 .into_iter().flatten() 消除 Clippy 警告
-        for (pa, pb, profit_wei) in results.into_iter().flatten() {
-            // 简单的动态 Gas 策略: 成本预估 0.00015 ETH
-            let min_cost = parse_ether("0.00015").unwrap();
+        // 3. 处理结果 (只打印，不发交易)
+        for (pa, pb, out_eth) in results.into_iter().flatten() {
+            // 只要稍微有点价差 (out_eth > borrow_amount) 就打印
+            if out_eth > borrow_amount {
+                let profit_wei = out_eth - borrow_amount;
 
-            if profit_wei > min_cost {
-                info!(
-                    "💰 PROFIT FOUND: [{} -> {}] Profit: {} ETH",
-                    pa.name,
-                    pb.name,
-                    format_ether(profit_wei)
-                );
+                // 估算一个大概的 Gas 成本 (0.00015 ETH)
+                let estimated_cost = parse_ether("0.00015").unwrap();
 
-                // 构造交易步骤
-                let steps = vec![
-                    SwapStep {
-                        router: pa.router,
-                        token_in: weth_addr_parsed,
-                        token_out: pa.token_other,
-                        fee: pa.fee,
-                    },
-                    SwapStep {
-                        router: pb.router,
-                        token_in: pa.token_other,
-                        token_out: weth_addr_parsed,
-                        fee: pb.fee,
-                    },
-                ];
+                info!("👀 [观察] 发现价差: {} -> {}", pa.name, pb.name);
+                info!("   投入: 0.1 ETH");
+                info!("   产出: {} ETH", format_ether(out_eth));
+                info!("   毛利: {} ETH", format_ether(profit_wei));
 
-                let min_profit = U256::zero(); // 依赖合约回滚
-                let tx_call = executor_contract.execute_arb(borrow_amount, steps, min_profit);
-
-                let nonce = nonce_manager.get_next();
-                let (base, prio) = estimate_fees(&provider)
-                    .await
-                    .unwrap_or((U256::from(1e8 as u64), U256::from(1e8 as u64)));
-
-                let tx = Eip1559TransactionRequest::new()
-                    .to(contract_addr)
-                    .data(tx_call.calldata().unwrap())
-                    .gas(500_000)
-                    .max_fee_per_gas(base + prio)
-                    .max_priority_fee_per_gas(prio)
-                    .nonce(nonce);
-
-                match client.send_transaction(tx, None).await {
-                    Ok(p) => info!("Tx Sent: {:?}", p.tx_hash()),
-                    Err(e) => {
-                        error!("Tx Fail: {:?}", e);
-                        let _ = nonce_manager.sync_from_chain().await;
-                    }
+                if profit_wei > estimated_cost {
+                    info!("   🔥 状态: 【盈利】 (如果开启交易，这单就赚了!)");
+                } else {
+                    info!(
+                        "   ❄️ 状态: 【微利】 (利润 {} < 成本 {}, 不够付Gas)",
+                        format_ether(profit_wei),
+                        format_ether(estimated_cost)
+                    );
                 }
+                info!("--------------------------------------------------");
             }
         }
     }
@@ -323,6 +285,8 @@ fn load_encrypted_config() -> Result<AppConfig> {
     Ok(serde_json::from_slice(&decrypted_bytes)?)
 }
 
+// 辅助函数：估算 Gas 价格 (仅供日志展示使用)
+#[allow(dead_code)]
 async fn estimate_fees(provider: &Provider<Ipc>) -> Result<(U256, U256)> {
     let block = provider
         .get_block(BlockNumber::Latest)
