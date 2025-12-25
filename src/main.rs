@@ -10,7 +10,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File},
+    fs::{self, File, OpenOptions}, // 引入 OpenOptions 用于追加写入
+    io::Write,                     // 引入 Write trait
     str::FromStr,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -26,7 +27,6 @@ struct AppConfig {
     private_key: String,
     ipc_path: String,
     contract_address: String,
-    // 保留字段以兼容配置文件
     smtp_username: String,
     smtp_password: String,
     my_email: String,
@@ -35,7 +35,6 @@ struct AppConfig {
 #[derive(Debug, Deserialize, Clone)]
 struct JsonPoolInput {
     name: String,
-    // token_a/b 仅用于配置文件读取，转换到 PoolConfig 后不再存储
     token_a: String,
     token_b: String,
     router: String,
@@ -122,11 +121,6 @@ impl NonceManager {
             address,
         })
     }
-    // 观察模式不需要发送交易，保留此函数以防后续切回交易模式
-    #[allow(dead_code)]
-    fn get_next(&self) -> U256 {
-        U256::from(self.nonce.fetch_add(1, Ordering::SeqCst))
-    }
 }
 
 // --- Main Entry ---
@@ -134,8 +128,8 @@ impl NonceManager {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 Observation Bot (Dry Run)");
-    info!("👀 模式: 只观察不交易，打印所有微利机会");
+    info!("🚀 System Starting: Base V3 Recorder Bot");
+    info!("💾 模式: 赚钱机会将被记录到 opportunities.txt");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -144,7 +138,6 @@ async fn main() -> Result<()> {
     let my_addr = wallet.address();
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
 
-    // 即使不发交易，加载这些结构也没坏处
     let _contract_addr: Address = config.contract_address.parse()?;
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
@@ -174,22 +167,22 @@ async fn main() -> Result<()> {
     info!("Waiting for blocks...");
 
     loop {
-        let _block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
+        let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
             _ => {
                 warn!("Timeout/No Block");
                 continue;
             }
         };
+        let current_bn = block.number.unwrap();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached. Stopping.");
             break;
         }
 
-        // --- Concurrent Observation Logic ---
+        // --- Concurrent Logic ---
 
-        // 1. 生成候选列表 (两两配对)
         let mut candidates = Vec::new();
         for i in 0..pools.len() {
             for j in 0..pools.len() {
@@ -204,14 +197,13 @@ async fn main() -> Result<()> {
             }
         }
 
-        let borrow_amount = parse_ether("0.1").unwrap(); // 模拟 0.1 ETH
+        let borrow_amount = parse_ether("0.1").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
-        // 2. 高并发查询
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A: WETH -> Token (Pool A)
+                // Step A
                 let quoter_a = IQuoterV2::new(pa.quoter, client_ref.clone());
                 let params_a = QuoteParams {
                     token_in: weth_addr_parsed,
@@ -226,7 +218,7 @@ async fn main() -> Result<()> {
                     Err(_) => return None,
                 };
 
-                // Step B: Token -> WETH (Pool B)
+                // Step B
                 let quoter_b = IQuoterV2::new(pb.quoter, client_ref.clone());
                 let params_b = QuoteParams {
                     token_in: pa.token_other,
@@ -243,34 +235,47 @@ async fn main() -> Result<()> {
 
                 Some((pa, pb, out_eth))
             })
-            .buffer_unordered(30) // 并发度 30
+            .buffer_unordered(30)
             .collect::<Vec<_>>()
             .await;
 
-        // 3. 处理结果 (只打印，不发交易)
+        // 4. 处理结果并记录
         for (pa, pb, out_eth) in results.into_iter().flatten() {
-            // 只要稍微有点价差 (out_eth > borrow_amount) 就打印
             if out_eth > borrow_amount {
-                let profit_wei = out_eth - borrow_amount;
+                // 发现赚钱机会 (毛利 > 0)
+                let profit = out_eth - borrow_amount;
+                let profit_eth = format_ether(profit);
+                let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-                // 估算一个大概的 Gas 成本 (0.00015 ETH)
-                let estimated_cost = parse_ether("0.00015").unwrap();
-
-                info!("👀 [观察] 发现价差: {} -> {}", pa.name, pb.name);
-                info!("   投入: 0.1 ETH");
-                info!("   产出: {} ETH", format_ether(out_eth));
-                info!("   毛利: {} ETH", format_ether(profit_wei));
-
-                if profit_wei > estimated_cost {
-                    info!("   🔥 状态: 【盈利】 (如果开启交易，这单就赚了!)");
+                // 估算是否能覆盖 Gas (假设 Gas 成本 0.00015 ETH)
+                let gas_cost = parse_ether("0.00015").unwrap();
+                let net_status = if profit > gas_cost {
+                    "🔥[高利]"
                 } else {
-                    info!(
-                        "   ❄️ 状态: 【微利】 (利润 {} < 成本 {}, 不够付Gas)",
-                        format_ether(profit_wei),
-                        format_ether(estimated_cost)
-                    );
+                    "❄️[微利]"
+                };
+
+                let log_msg = format!(
+                    "[{}] Block: {} | Type: {} | {} -> {} | Profit: {} ETH\n",
+                    timestamp, current_bn, net_status, pa.name, pb.name, profit_eth
+                );
+
+                // 打印到控制台
+                info!("{}", log_msg.trim());
+
+                // 写入文件
+                if let Ok(mut file) = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("opportunities.txt")
+                {
+                    if let Err(e) = file.write_all(log_msg.as_bytes()) {
+                        error!("Failed to write to file: {:?}", e);
+                    }
                 }
-                info!("--------------------------------------------------");
+            } else {
+                info!("🧊 [LOSS] {} -> {}", pa.name, pb.name);
+                info!("   📉 亏损: -{} ETH (手续费太高)", format_ether(loss));
             }
         }
     }
@@ -283,16 +288,4 @@ fn load_encrypted_config() -> Result<AppConfig> {
     let cocoon = Cocoon::new(password.as_bytes());
     let decrypted_bytes = cocoon.parse(&mut file).map_err(|e| anyhow!("{:?}", e))?;
     Ok(serde_json::from_slice(&decrypted_bytes)?)
-}
-
-// 辅助函数：估算 Gas 价格 (仅供日志展示使用)
-#[allow(dead_code)]
-async fn estimate_fees(provider: &Provider<Ipc>) -> Result<(U256, U256)> {
-    let block = provider
-        .get_block(BlockNumber::Latest)
-        .await?
-        .ok_or(anyhow!("No block"))?;
-    let base = block.base_fee_per_gas.unwrap_or(U256::from(100_000_000));
-    let priority = parse_units("0.1", "gwei")?.into();
-    Ok((base * 120 / 100, priority))
 }
