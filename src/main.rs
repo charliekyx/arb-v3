@@ -440,22 +440,20 @@ async fn main() -> Result<()> {
                 }
                 let pb = &pools[j];
 
-                // 🔥 修改点：不再无脑跳过带 WETH 的池子
-                // 只有当这个池子直接把我们换回了起点(WETH)，才跳过（因为那是2-Hop的事）
-                if (pb.token_a == weth_addr_parsed && pb.token_b == token_1)
-                    || (pb.token_b == weth_addr_parsed && pb.token_a == token_1)
-                {
-                    continue;
-                }
-
+                // 修正：如果 token_1 是 A，这个池子是 A/B，那么 token_2 应该拿到 B
                 if pb.token_a != token_1 && pb.token_b != token_1 {
                     continue;
                 }
                 let token_2 = if pb.token_a == token_1 {
                     pb.token_b
                 } else {
-                    pa.token_a
-                }; // 修正此处一个小bug，应为 pb.token_a
+                    pb.token_a
+                };
+
+                // 重点：只有当第 2 跳又回到了 WETH 时才跳过（因为那是 2-hop 的事）
+                if token_2 == weth_addr_parsed {
+                    continue;
+                }
 
                 for k in 0..pools.len() {
                     if k == i || k == j {
@@ -476,6 +474,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
+
         let total_candidates = candidates.len();
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let ok_paths_ref = ok_paths.clone();
@@ -486,6 +485,10 @@ async fn main() -> Result<()> {
                 let ok_paths = ok_paths_ref.clone();
                 async move {
                     let mut path_profitable = false;
+                    let mut best_gross = I256::from(i64::MIN);
+                    let mut best_report = String::new();
+                    let mut found_any = false;
+
                     // 🔥 局部改动：针对每条路径，跑遍所有资金档位
                     for size in test_sizes {
                         let mut current_amt = size;
@@ -538,23 +541,26 @@ async fn main() -> Result<()> {
                             let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
                             let net = gross - gas_cost;
 
-                            let route_name = if path.is_triangle {
-                                format!(
-                                    "{}->{}->{}",
-                                    path.pools[0].name, path.pools[1].name, path.pools[2].name
-                                )
-                            } else {
-                                format!("{}->{}", path.pools[0].name, path.pools[1].name)
-                            };
-
-                            info!(
-                                "🧊 WATCH: {} | Size: {} | Gross: {} | Net: {} (Gas: {})",
-                                route_name,
-                                format_ether(size),
-                                gross,
-                                net,
-                                gas_cost
-                            );
+                            found_any = true;
+                            if gross > best_gross {
+                                best_gross = gross;
+                                let route_name = if path.is_triangle {
+                                    format!(
+                                        "{}->{}->{}",
+                                        path.pools[0].name, path.pools[1].name, path.pools[2].name
+                                    )
+                                } else {
+                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
+                                };
+                                best_report = format!(
+                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {})",
+                                    route_name,
+                                    format_ether(size),
+                                    gross,
+                                    net,
+                                    gas_cost
+                                );
+                            }
 
                             // 只要毛利为正，就记录“证据”
                             if gross > I256::zero() {
@@ -577,6 +583,13 @@ async fn main() -> Result<()> {
                                 info!("{}", report);
                                 append_log_to_file(&report);
                             }
+                        }
+                    }
+
+                    if found_any {
+                        // 仅当最佳档位的毛利 > -0.001 ETH 时才显示（过滤掉必死路径）
+                        if best_gross > I256::from(-1000000000000000i128) {
+                            info!("{}", best_report);
                         }
                     }
                 }
