@@ -79,7 +79,7 @@ abigen!(
         function tickSpacing() external view returns (int24)
         function fee() external view returns (uint24)
         function liquidity() external view returns (uint128)
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
         function token0() external view returns (address)
     ]"#;
 
@@ -211,6 +211,39 @@ async fn debug_slot0_raw(provider: &Provider<Ipc>, pool: Address) -> Result<()> 
     Ok(())
 }
 
+use ethers::abi::{encode, Token};
+fn selector(sig: &str) -> [u8; 4] {
+    let h = keccak256(sig.as_bytes());
+    [h[0], h[1], h[2], h[3]]
+}
+async fn debug_quoter_raw(
+    provider: &Provider<Ipc>,
+    quoter: Address,
+    token_in: Address,
+    token_out: Address,
+    amount_in: U256,
+    fee: u32,
+) -> Result<()> {
+    // quoteExactInputSingle((address,address,uint256,uint24,uint160))
+    let sel = selector("quoteExactInputSingle((address,address,uint256,uint24,uint160))");
+    // ABI encode the tuple
+    let tuple = Token::Tuple(vec![
+        Token::Address(token_in),
+        Token::Address(token_out),
+        Token::Uint(amount_in),
+        Token::Uint(U256::from(fee)), // uint24 放进 uint256 encode 没问题（ABI 会截断/读取低位）
+        Token::Uint(U256::zero()),    // sqrtPriceLimitX96
+    ]);
+    let mut data = Vec::with_capacity(4 + 32 * 5);
+    data.extend_from_slice(&sel);
+    data.extend_from_slice(&encode(&[tuple]));
+    let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
+    let out: Bytes = provider.call(&tx.into(), None).await?;
+    info!("quoter raw len={} bytes", out.0.len());
+    info!("quoter raw=0x{}", hex::encode(&out.0));
+    Ok(())
+}
+
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -332,8 +365,21 @@ async fn get_amount_out(
                 fee: pool.pool_fee,
                 sqrt_price_limit_x96: U256::zero(),
             };
-            if let Ok(out) = quoter.quote_exact_input_single(params).call().await {
-                return Ok(out); // ✅ 只有 Quoter 给出的价格在大额时才可信
+            match quoter.quote_exact_input_single(params).call().await {
+                Ok(out) => return Ok(out),
+                Err(e) => {
+                    warn!("❌ CL Quoter revert/decode fail {}: {:?}", pool.name, e);
+                    // Debug raw return
+                    let _ = debug_quoter_raw(
+                        client.provider(),
+                        pool.quoter.unwrap(),
+                        token_in,
+                        token_out,
+                        amount_in,
+                        pool.pool_fee,
+                    )
+                    .await;
+                }
             }
         }
 
@@ -344,7 +390,7 @@ async fn get_amount_out(
 
         // 原有的 slot0 fallback 仅用于小额“存活探测”
         let pc = ICLPool::new(pool.pool.unwrap(), client);
-        let (sqrt, _, _, _, _, _, _) = pc.slot_0().call().await?;
+        let (sqrt, _, _, _, _, _) = pc.slot_0().call().await?;
         let t0 = pc.token_0().call().await?;
         let raw = calculate_v3_amount_out(amount_in, U256::from(sqrt), token_in, t0);
         Ok(raw * (1000000 - pool.fee) / 1000000)

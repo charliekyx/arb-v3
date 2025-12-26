@@ -53,8 +53,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 100,
-        "pool_fee": 500,
+        "tick_spacing": 1,
+        "pool_fee": 90,
         "protocol": "cl"
     },
     {
