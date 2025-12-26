@@ -54,13 +54,13 @@
         "protocol": "v3"
     },
     {
-        "name": "Aerodrome_VIRTUAL_V2",
+        "name": "Aerodrome_VIRTUAL_CL",
         "token_a": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0xf70dc10bac8be2e09bb4c5cf543449329034f672",
+        "quoter": "0x2b36A00E19014B749969062332A6B29037c75E26",
         "fee": 3000,
-        "protocol": "v2"
+        "protocol": "cl"
     },
     {
         "name": "Uniswap_VIRTUAL_0.3%",
