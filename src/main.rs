@@ -4,7 +4,7 @@ use cocoon::Cocoon;
 use ethers::{
     prelude::*,
     types::{Address, U256},
-    utils::{format_ether, parse_ether}, // 移除了未使用的 parse_units
+    utils::{format_ether, parse_ether},
 };
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -13,11 +13,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     str::FromStr,
-    sync::{
-        atomic::AtomicU64, // 移除了未使用的 Ordering
-        Arc,
-        Mutex,
-    },
+    sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
 };
 use tracing::{error, info, warn};
@@ -68,10 +64,18 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // 通用 V2 Pair 接口 (直接查询储备量)
-   IUniswapV2Pair,
+    // 通用 Uniswap V2 接口 (保留以备不时之需)
+    IUniswapV2Pair,
     r#"[
         function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
+        function token0() external view returns (address)
+    ]"#;
+
+    // [新增] Aerodrome V2 Pair 接口 (适配 Solidly/Velodrome 模式)
+    IAerodromePair,
+    r#"[
+        function reserve0() external view returns (uint256)
+        function reserve1() external view returns (uint256)
         function token0() external view returns (address)
     ]"#
 );
@@ -138,24 +142,34 @@ async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
     token_in: Address,
-    token_out: Address, // 虽然这里没用到 token_out，但为了统一接口保留
+    token_out: Address,
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 逻辑 (直接问 Aerodrome Pair) ---
-        // 这里的 pool.quoter 实际上存的是 Pair 地址
-        let pair = IUniswapV2Pair::new(pool.quoter, client.clone());
+        // --- V2 逻辑 (Aerodrome Pair) ---
+        // 使用新定义的 IAerodromePair 接口
+        let pair = IAerodromePair::new(pool.quoter, client.clone());
 
-        // 1. 获取储备量
-        let (r0, r1, _) = pair.get_reserves().call().await?;
-        // 2. 确认 token0 是哪个 (这里修改了 token0() -> token_0())
-        let t0 = pair.token_0().call().await?;
+        // 1. 分别获取 reserve0 和 reserve1 (解决 getReserves 不存在的问题)
+        let r0 = pair
+            .reserve_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("Failed to get reserve0: {}", e))?;
+        let r1 = pair
+            .reserve_1()
+            .call()
+            .await
+            .map_err(|e| anyhow!("Failed to get reserve1: {}", e))?;
 
-        let (reserve_in, reserve_out) = if t0 == token_in {
-            (U256::from(r0), U256::from(r1))
-        } else {
-            (U256::from(r1), U256::from(r0))
-        };
+        // 2. 确认 token0 是哪个
+        let t0 = pair
+            .token_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("Failed to get token0: {}", e))?;
+
+        let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
 
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty reserves"));
@@ -228,7 +242,7 @@ async fn main() -> Result<()> {
         pools.push(PoolConfig {
             name: cfg.name,
             router: Address::from_str(&cfg.router)?,
-            quoter: Address::from_str(&cfg.quoter)?, // V2模式下这里是Pair地址
+            quoter: Address::from_str(&cfg.quoter)?, // V2模式下这里必须是Pair地址
             fee: cfg.fee,
             token_other,
             protocol: proto_code,
@@ -307,7 +321,6 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(_e) => {
-                        // 忽略未使用的 _e 变量警告
                         // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
