@@ -562,10 +562,11 @@ async fn main() -> Result<()> {
                     route_name, gross_profit, net_profit
                 )
             } else if gross_profit > I256::from(-50000000000000i64) {
-                format!(
-                    "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
-                    route_name, gross_profit, net_profit, gas_cost
-                )
+                // format!(
+                //     "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
+                //     route_name, gross_profit, net_profit, gas_cost
+                // )
+                String::new()
             } else {
                 String::new()
             };
