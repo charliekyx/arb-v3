@@ -519,6 +519,13 @@ async fn main() -> Result<()> {
                         }
 
                         if !failed {
+                            // 🔥 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
+                            // 这样 OkPaths 就会显示所有能跑通的路径数量，而不仅仅是盈利的
+                            if !path_profitable {
+                                ok_paths.fetch_add(1, Ordering::Relaxed);
+                                path_profitable = true;
+                            }
+
                             // 计算毛利
                             let gross = if current_amt > size {
                                 I256::from((current_amt - size).as_u128())
@@ -551,10 +558,6 @@ async fn main() -> Result<()> {
 
                             // 只要毛利为正，就记录“证据”
                             if gross > I256::zero() {
-                                if !path_profitable {
-                                    ok_paths.fetch_add(1, Ordering::Relaxed);
-                                    path_profitable = true;
-                                }
                                 let mut report = format!(
                                     "--- Opportunity (Size: {} ETH) ---\n",
                                     format_ether(size)
