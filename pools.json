@@ -147,41 +147,23 @@
         "protocol": "cl"
     },
     {
-        "name": "Uniswap_cbETH_WETH_0.01%",
-        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 100,
-        "protocol": "v3"
-    },
-    {
-        "name": "Uniswap_cbETH_USDC_0.05%",
-        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 500,
-        "protocol": "v3"
-    },
-    {
-        "name": "Aerodrome_cbETH_WETH_CL",
-        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
+        "name": "Aerodrome_cbETH_WETH_CL_0.01%",
+        "token_a": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0x3368940C68E773405788531773076136B0B820F7",
+        "pool": "0x47cA96Ea59C13F72745928887f84C9F52C3D7348",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
         "fee": 100,
         "protocol": "cl"
     },
     {
-        "name": "Aerodrome_ezETH_WETH_CL",
-        "token_a": "0x2416092f14339098a3e39485637adBe91430b63b",
+        "name": "Aerodrome_ezETH_WETH_CL_0.01%",
+        "token_a": "0x2416092f143378750bb29b79ed961ab195cceea5",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0xd1bA8D15E5E994646736735e2373C33737b77943",
+        "pool": "0xDC7EAd706795eDa3FEDa08Ad519d9452BAdF2C0d",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 500,
+        "fee": 100,
         "protocol": "cl"
     }
 ]
