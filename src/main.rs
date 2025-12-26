@@ -58,17 +58,11 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
-    // ✅ Quoter V2 (用于 Uniswap V3) - 参数是结构体
+    // ✅ 统一使用 QuoterV2 接口 (Aerodrome Slipstream 也是 V2)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
-    ]"#;
-
-    // ✅ Quoter V1 (用于 Aerodrome CL) - 参数是直接列表
-    IQuoterV1,
-    r#"[
-        function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
     ]"#;
 
     IAerodromePair,
@@ -119,7 +113,7 @@ impl SharedGasManager {
     }
 }
 
-// 核心：通用询价函数 (完美兼容版)
+// 核心：通用询价函数
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -156,22 +150,9 @@ async fn get_amount_out(
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
-    } else if pool.protocol == 2 {
-        // --- CL Logic (Aerodrome Slipstream) -> 使用 Quoter V1 ---
-        // Aerodrome CL 使用的是类似 Uniswap V3 Quoter V1 的接口 (非 Struct 参数)
-        let quoter = IQuoterV1::new(pool.quoter, client);
-
-        // 调用: quoteExactInputSingle(tokenIn, tokenOut, fee, amountIn, sqrtPriceLimitX96)
-        let amount_out = quoter
-            .quote_exact_input_single(token_in, token_out, pool.fee, amount_in, U256::zero())
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL QuoterV1 revert: {}", e))?;
-
-        Ok(amount_out)
     } else {
-        // --- V3 Logic (Uniswap V3) -> 使用 Quoter V2 ---
-        // Uniswap V3 在 Base 上使用的是 Quoter V2 (Struct 参数)
+        // --- V3 & CL Logic (Unified Quoter V2) ---
+        // Aerodrome Slipstream 使用的是 QuoterV2 (Struct 参数)
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -180,7 +161,14 @@ async fn get_amount_out(
             fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
-        let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
+
+        // 如果这里报错，99% 是因为该 Fee Tier 的池子不存在
+        let (amount_out, _, _, _) = quoter
+            .quote_exact_input_single(params)
+            .call()
+            .await
+            .map_err(|e| anyhow!("QuoterV2 revert: {}", e))?;
+
         Ok(amount_out)
     }
 }
@@ -190,8 +178,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.6 (Final Fix)");
-    info!("🔥 模式: V2(Reserves) + CL(QuoterV1) + V3(QuoterV2)");
+    info!("🚀 System Starting: Base Bot V3.7 (Correct Interface)");
+    info!("🔥 模式: V2(Reserves) + V3/CL(QuoterV2 Struct)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -199,7 +187,6 @@ async fn main() -> Result<()> {
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
 
-    // Load Pools
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
     let weth = Address::from_str(WETH_ADDR)?;
@@ -210,14 +197,13 @@ async fn main() -> Result<()> {
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
 
-        // 严格区分协议类型
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
-            1 // Aerodrome Basic
+            1
         } else if proto_str == "cl" {
-            2 // Aerodrome Slipstream (Quoter V1)
+            2
         } else {
-            0 // Uniswap V3 (Quoter V2)
+            0
         };
 
         pools.push(PoolConfig {
@@ -263,14 +249,13 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 使用 0.001 ETH 进行高频探测
         let borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A: WETH -> Token
+                // Step A
                 let out_token = match get_amount_out(
                     client_ref.clone(),
                     &pa,
@@ -282,13 +267,13 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 调试阶段建议打开这个Warn，排错用
+                        // 依然保留 warn 以便确认是否是池子不存在
                         warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
 
-                // Step B: Token -> WETH
+                // Step B
                 let out_eth = match get_amount_out(
                     client_ref.clone(),
                     &pb,
@@ -313,7 +298,6 @@ async fn main() -> Result<()> {
         info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
-                // 🚀 盈利分支
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -330,7 +314,6 @@ async fn main() -> Result<()> {
                 );
                 info!("{}", log_msg);
 
-                // 写入文件
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -338,10 +321,7 @@ async fn main() -> Result<()> {
                 {
                     let _ = writeln!(file, "{}", log_msg);
                 }
-
-                // TODO: 可以在这里加入实盘交易代码
             } else {
-                // 🧊 亏损分支 (仅日志)
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
