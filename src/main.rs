@@ -195,15 +195,30 @@ async fn validate_v2_pool(
     pool: &PoolConfig,
 ) -> bool {
     if let Some(pair_addr) = pool.quoter {
-        let pair = IAerodromePair::new(pair_addr, client);
+        let pair = IAerodromePair::new(pair_addr, client.clone());
 
-        // 🔥 只要能成功读取 Reserves 或者 getAmountOut 就算通过
-        // 这样可以兼容不同版本的 Aerodrome V2 合约
-        let test_amount = parse_ether("0.01").unwrap();
-        pair.get_amount_out(test_amount, pool.token_a)
+        // 🔥 探测点：只要能读到 Reserves，就证明这是一个有效的 V2 池
+        // 不要去调 token0/1 了，有些 Stable 池的实现可能在签名上有细微差别
+        if pair.get_reserves().call().await.is_ok() {
+            return true;
+        }
+
+        // 备选探测：尝试询价 1 ETH
+        let test_amount = parse_ether("1.0").unwrap();
+        if pair
+            .get_amount_out(test_amount, pool.token_a)
             .call()
             .await
             .is_ok()
+        {
+            return true;
+        }
+
+        warn!(
+            "❌ Pool {} failed validation (No Reserves & No Quote)",
+            pool.name
+        );
+        false
     } else {
         false
     }
