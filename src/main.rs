@@ -286,7 +286,7 @@ async fn main() -> Result<()> {
                     Ok(amt) => amt,
                     Err(e) => {
                         // 仅在非 Revert 错误时打印警告，保持日志清爽
-                        // warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
+                        warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(_e) => {
-                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
+                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
                 };
