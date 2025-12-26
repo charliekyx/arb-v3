@@ -69,7 +69,7 @@ abigen!(
     ]"#;
 
     // 通用 V2 Pair 接口 (直接查询储备量)
-    IUniswapV2Pair,
+   IUniswapV2Pair,
     r#"[
         function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
         function token0() external view returns (address)
