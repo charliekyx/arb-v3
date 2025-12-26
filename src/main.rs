@@ -450,9 +450,9 @@ async fn main() -> Result<()> {
                     }
                     let pc = &pools[k];
                     let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                    let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
+                    // let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
 
-                    if pc_has_token2 && pc_has_weth {
+                    if pc_has_token2 {
                         candidates.push(ArbPath {
                             pools: vec![pa.clone(), pb.clone(), pc.clone()],
                             tokens: vec![weth, token_1, token_2, weth],
