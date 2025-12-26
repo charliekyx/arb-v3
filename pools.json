@@ -18,6 +18,15 @@
         "protocol": "v3"
     },
     {
+        "name": "Uniswap_AERO_1%",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
+        "protocol": "v3"
+    },
+    {
         "name": "Aerodrome_BRETT_CL",
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x4200000000000000000000000000000000000006",
@@ -33,6 +42,15 @@
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
+        "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_BRETT_1%",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
         "protocol": "v3"
     },
     {
@@ -54,6 +72,15 @@
         "protocol": "v3"
     },
     {
+        "name": "Uniswap_DEGEN_1%",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
+        "protocol": "v3"
+    },
+    {
         "name": "Aerodrome_wstETH_CL",
         "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
         "token_b": "0x4200000000000000000000000000000000000006",
@@ -69,6 +96,33 @@
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 100,
+        "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_wstETH_0.05%",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 500,
+        "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_wstETH_0.3%",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 3000,
+        "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_USDC_LowFee",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 500,
         "protocol": "v3"
     }
 ]
