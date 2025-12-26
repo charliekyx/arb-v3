@@ -235,8 +235,8 @@ async fn get_amount_out(
             .await
             .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
     } else if pool.protocol == 2 {
-        if let Some(quoter_addr) = pool.quoter {
-            let quoter = IMixedRouteQuoterV1::new(quoter_addr, client.clone());
+        if let Some(q) = pool.quoter {
+            let quoter = IMixedRouteQuoterV1::new(q, client.clone());
             let params = i_mixed_route_quoter_v1::QuoteParams {
                 token_in,
                 token_out,
@@ -244,28 +244,22 @@ async fn get_amount_out(
                 fee: pool.fee,
                 sqrt_price_limit_x96: U256::zero(),
             };
-            if let Ok((amount_out, _, _, _)) =
-                quoter.quote_exact_input_single_v2(params).call().await
-            {
-                return Ok(amount_out);
+            if let Ok((out, _, _, _)) = quoter.quote_exact_input_single_v2(params).call().await {
+                return Ok(out); // ✅ 只有 Quoter 给出的价格在大额时才可信
             }
         }
-        let pool_addr = pool.pool.ok_or(anyhow!("CL missing pool address"))?;
-        let pool_contract = ICLPool::new(pool_addr, client.clone());
-        let (sqrt_price, _, _, _, _, _) = pool_contract
-            .slot_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL Slot0: {}", e))?;
-        let token0 = pool_contract
-            .token_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL Token0: {}", e))?;
-        let raw_out = calculate_v3_amount_out(amount_in, U256::from(sqrt_price), token_in, token0);
-        let fee_ppm = U256::from(pool.fee);
-        let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
-        Ok(out_after_fee)
+
+        // 🔥 限制 Fallback 条件：仅当金额极小 (如 < 0.005 ETH) 且无 Quoter 时作为调试参考
+        if amount_in > parse_ether("0.005").unwrap() {
+            return Err(anyhow!("CL Quoter failed for large size: {}", pool.name));
+        }
+
+        // 原有的 slot0 fallback 仅用于小额“存活探测”
+        let pc = ICLPool::new(pool.pool.unwrap(), client);
+        let (sqrt, _, _, _, _, _) = pc.slot_0().call().await?;
+        let t0 = pc.token_0().call().await?;
+        let raw = calculate_v3_amount_out(amount_in, U256::from(sqrt), token_in, t0);
+        Ok(raw * (1000000 - pool.fee) / 1000000)
     } else {
         let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
         let quoter = IQuoterV2::new(quoter_addr, client);
@@ -301,7 +295,7 @@ async fn main() -> Result<()> {
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
-    let weth = Address::from_str(WETH_ADDR)?;
+    let _weth = Address::from_str(WETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
@@ -382,15 +376,15 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let borrow_amount = parse_ether("0.001").unwrap();
+        let _borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
         let gas_price = provider
             .get_gas_price()
             .await
             .unwrap_or(parse_ether("0.0000000001").unwrap());
-        let gas_cost_2hop = (gas_price * U256::from(300_000)).as_u128();
-        let gas_cost_3hop = (gas_price * U256::from(450_000)).as_u128();
+        let _gas_cost_2hop = (gas_price * U256::from(300_000)).as_u128();
+        let _gas_cost_3hop = (gas_price * U256::from(450_000)).as_u128();
 
         let mut candidates = Vec::new();
 
