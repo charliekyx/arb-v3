@@ -866,17 +866,31 @@ async fn main() -> Result<()> {
                     let start_token = path.tokens[0];
                     let test_sizes = if decimals(start_token) == 6 {
                         vec![
+                            parse_amount("50", start_token),
+                            parse_amount("100", start_token),
+                            parse_amount("250", start_token),
+                            parse_amount("500", start_token),
                             parse_amount("1000", start_token),
+                            parse_amount("2500", start_token),
                             parse_amount("5000", start_token),
                             parse_amount("10000", start_token),
                         ]
                     } else {
                         vec![
+                            parse_amount("0.01", start_token),
+                            parse_amount("0.05", start_token),
+                            parse_amount("0.1", start_token),
+                            parse_amount("0.5", start_token),
                             parse_amount("1", start_token),
+                            parse_amount("2", start_token),
                             parse_amount("5", start_token),
                             parse_amount("10", start_token),
                         ]
                     };
+
+                    // 标记是否能计算 Gas (防止非主流代币出现假盈利)
+                    let can_price_gas =
+                        start_token == weth || start_token == usdc || start_token == usdbc;
 
                     // 🔥 局部改动：针对每条路径，跑遍所有资金档位
                     for size in test_sizes {
@@ -978,15 +992,15 @@ async fn main() -> Result<()> {
                             }
 
                             // 3. 只有 Net > 0 才算 Profitable (且记录 Opportunity)
-                            if net > I256::zero() {
+                            if can_price_gas && net > I256::zero() {
                                 if !path_is_profitable {
                                     profitable_paths.fetch_add(1, Ordering::Relaxed);
                                     path_is_profitable = true;
                                 }
 
                                 let mut report = format!(
-                                    "--- Opportunity (Size: {} ETH) ---\n",
-                                    format_ether(size)
+                                    "--- Opportunity (Size: {}) ---\n",
+                                    format_token_amount(size, start_token)
                                 );
                                 for (idx, (inp, outp, p_name)) in step_results.iter().enumerate() {
                                     report.push_str(&format!(
@@ -1029,8 +1043,14 @@ async fn main() -> Result<()> {
 
                         let best_net = best_gross - gas_cost_display;
 
-                        // 仅当最佳档位的净利 > -0.00005 ETH 时才显示（接近盈利）
-                        if best_net > I256::from(-50_000_000_000_000i128) {
+                        // 修正 WATCH 阈值：USDC 用 -0.05，ETH 用 -0.00005
+                        let near_threshold = if start_token == usdc || start_token == usdbc {
+                            I256::from(-50_000i128)
+                        } else {
+                            I256::from(-50_000_000_000_000i128)
+                        };
+
+                        if best_net > near_threshold {
                             info!("{}", best_report);
                         }
                     }
