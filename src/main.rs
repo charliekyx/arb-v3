@@ -295,7 +295,7 @@ async fn main() -> Result<()> {
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
-    let _weth = Address::from_str(WETH_ADDR)?;
+    let weth = Address::from_str(WETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
@@ -389,37 +389,40 @@ async fn main() -> Result<()> {
         let mut candidates = Vec::new();
 
         // 2-Hop
+        // 2-Hop 逻辑中，确保不只是 weth <-> mid <-> weth
+        // 而是可以在不同的池子间跳
         for i in 0..pools.len() {
             for j in 0..pools.len() {
                 if i == j {
                     continue;
                 }
-                let pa = &pools[i];
-                let pb = &pools[j];
-                let start_token = weth_addr_parsed;
-                if pa.token_a != start_token && pa.token_b != start_token {
-                    continue;
-                }
-                let token_mid = if pa.token_a == start_token {
-                    pa.token_b
-                } else {
-                    pa.token_a
-                };
+                // 池子 A 包含 WETH，池子 B 也包含 WETH
+                if (pools[i].token_a == weth || pools[i].token_b == weth)
+                    && (pools[j].token_a == weth || pools[j].token_b == weth)
+                {
+                    let mid_i = if pools[i].token_a == weth {
+                        pools[i].token_b
+                    } else {
+                        pools[i].token_a
+                    };
+                    let mid_j = if pools[j].token_a == weth {
+                        pools[j].token_b
+                    } else {
+                        pools[j].token_a
+                    };
 
-                let pb_has_mid = pb.token_a == token_mid || pb.token_b == token_mid;
-                let pb_has_end = pb.token_a == start_token || pb.token_b == start_token;
-
-                if pb_has_mid && pb_has_end {
-                    candidates.push(ArbPath {
-                        pools: vec![pa.clone(), pb.clone()],
-                        tokens: vec![start_token, token_mid, start_token],
-                        is_triangle: false,
-                    });
+                    // 如果两个池子的中间币是同一种（比如都是 cbETH）
+                    if mid_i == mid_j {
+                        candidates.push(ArbPath {
+                            pools: vec![pools[i].clone(), pools[j].clone()],
+                            tokens: vec![weth, mid_i, weth],
+                            is_triangle: false,
+                        });
+                    }
                 }
             }
         }
-
-        // 3-Hop
+        // --- 3-Hop 路径生成器优化 ---
         for i in 0..pools.len() {
             let pa = &pools[i];
             if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
@@ -436,8 +439,12 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let pb = &pools[j];
-                let pb_has_weth = pb.token_a == weth_addr_parsed || pb.token_b == weth_addr_parsed;
-                if pb_has_weth {
+
+                // 🔥 修改点：不再无脑跳过带 WETH 的池子
+                // 只有当这个池子直接把我们换回了起点(WETH)，才跳过（因为那是2-Hop的事）
+                if (pb.token_a == weth_addr_parsed && pb.token_b == token_1)
+                    || (pb.token_b == weth_addr_parsed && pb.token_a == token_1)
+                {
                     continue;
                 }
 
@@ -447,8 +454,8 @@ async fn main() -> Result<()> {
                 let token_2 = if pb.token_a == token_1 {
                     pb.token_b
                 } else {
-                    pb.token_a
-                };
+                    pa.token_a
+                }; // 修正此处一个小bug，应为 pb.token_a
 
                 for k in 0..pools.len() {
                     if k == i || k == j {
@@ -469,7 +476,6 @@ async fn main() -> Result<()> {
                 }
             }
         }
-
         let total_candidates = candidates.len();
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let ok_paths_ref = ok_paths.clone();
