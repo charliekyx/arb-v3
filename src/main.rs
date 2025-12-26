@@ -34,7 +34,8 @@ struct JsonPoolInput {
     token_a: String,
     token_b: String,
     router: String,
-    quoter: String, // V3=QuoterAddr, CL=PoolAddr
+    quoter: Option<String>, // Optional: Contract Address
+    pool: Option<String>,   // Optional: Pool Address (for Slot0)
     fee: u32,
     protocol: Option<String>,
 }
@@ -43,7 +44,8 @@ struct JsonPoolInput {
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address,
+    quoter: Option<Address>,
+    pool: Option<Address>,
     fee: u32,
     token_a: Address,
     token_b: Address,
@@ -58,7 +60,13 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Slot0 for CL/V3 Local Calc
+    // Aerodrome CL MixedRouteQuoterV1
+    IMixedRouteQuoterV1,
+    r#"[
+        struct QuoteExactInputSingleV2Params { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
+        function quoteExactInputSingleV2(QuoteExactInputSingleV2Params params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+    ]"#;
+
     ICLPool,
     r#"[
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
@@ -113,7 +121,7 @@ impl SharedGasManager {
     }
 }
 
-// Local Calc V3 Price from sqrtPriceX96
+// Local Calc V3 Price
 fn calculate_v3_amount_out(
     amount_in: U256,
     sqrt_price_x96: U256,
@@ -122,21 +130,19 @@ fn calculate_v3_amount_out(
 ) -> U256 {
     let q96 = U256::from(2).pow(U256::from(96));
     if token_in == token0 {
-        // output = input * (sqrtPrice / 2^96)^2
         let numerator = amount_in
             .saturating_mul(sqrt_price_x96)
             .saturating_mul(sqrt_price_x96);
         let denominator = q96.saturating_mul(q96);
         numerator.checked_div(denominator).unwrap_or_default()
     } else {
-        // output = input / (sqrtPrice / 2^96)^2
         let numerator = amount_in.saturating_mul(q96).saturating_mul(q96);
         let denominator = sqrt_price_x96.saturating_mul(sqrt_price_x96);
         numerator.checked_div(denominator).unwrap_or_default()
     }
 }
 
-// Core Quote Function
+// Core Quote Function (Smart Fallback)
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -145,8 +151,11 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 Logic ---
-        let pair = IAerodromePair::new(pool.quoter, client.clone());
+        // --- V2 Logic (Pair Address stored in 'quoter' field historically, fix below) ---
+        // 为了兼容旧逻辑，V2 的 Pair 地址我们约定存在 config.pool 中更合理，或者 fallback 到 quoter
+        // 这里假设 V2 的 Pair 地址存在 pool.quoter 中 (根据之前的 pools.json)
+        let pair_addr = pool.quoter.ok_or(anyhow!("V2 missing pair address"))?;
+        let pair = IAerodromePair::new(pair_addr, client.clone());
         let r0 = pair
             .reserve_0()
             .call()
@@ -174,9 +183,33 @@ async fn get_amount_out(
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // --- CL Logic (Local Slot0) ---
-        // 直接读池子，不求人，不报错
-        let pool_contract = ICLPool::new(pool.quoter, client.clone());
+        // --- CL Logic (Smart Fallback) ---
+        // 1. Try Quoter (if configured)
+        if let Some(quoter_addr) = pool.quoter {
+            let quoter = IMixedRouteQuoterV1::new(quoter_addr, client.clone());
+            let params = QuoteExactInputSingleV2Params {
+                token_in,
+                token_out,
+                amount_in,
+                fee: pool.fee,
+                sqrt_price_limit_x96: U256::zero(),
+            };
+
+            // 尝试调用 Quoter
+            match quoter.quote_exact_input_single_v2(params).call().await {
+                Ok((amount_out, _, _, _)) => return Ok(amount_out),
+                Err(e) => {
+                    // 仅打印一次 Warn，避免刷屏 (或者包含 debug 信息)
+                    // warn!("⚠️ CL Quoter failed for {}, fallback to Slot0. Err: {:?}", pool.name, e);
+                }
+            }
+        }
+
+        // 2. Fallback to Local Slot0 Calc
+        let pool_addr = pool
+            .pool
+            .ok_or(anyhow!("CL missing pool address for slot0"))?;
+        let pool_contract = ICLPool::new(pool_addr, client.clone());
         let (sqrt_price, _, _, _, _, _) = pool_contract
             .slot_0()
             .call()
@@ -189,13 +222,13 @@ async fn get_amount_out(
             .map_err(|e| anyhow!("CL Token0 fail: {}", e))?;
 
         let raw_out = calculate_v3_amount_out(amount_in, U256::from(sqrt_price), token_in, token0);
-        // 模拟扣费
-        let fee_ppm = U256::from(pool.fee); // 3000
+        let fee_ppm = U256::from(pool.fee);
         let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
         Ok(out_after_fee)
     } else {
         // --- V3 Logic (Uniswap Quoter) ---
-        let quoter = IQuoterV2::new(pool.quoter, client);
+        let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
+        let quoter = IQuoterV2::new(quoter_addr, client);
         let params = QuoteParams {
             token_in,
             token_out,
@@ -220,7 +253,7 @@ struct ArbPath {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.3 (Local Calc + Triangles)");
+    info!("🚀 System Starting: Base Bot V5.4 (Smart Fallback)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -236,7 +269,11 @@ async fn main() -> Result<()> {
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
-        let quoter_addr = Address::from_str(&cfg.quoter)?;
+
+        // Parse Addresses: Some might be None depending on JSON
+        let quoter_addr = cfg.quoter.as_ref().map(|s| Address::from_str(s).unwrap());
+        let pool_addr = cfg.pool.as_ref().map(|s| Address::from_str(s).unwrap());
+
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
             1
@@ -250,6 +287,7 @@ async fn main() -> Result<()> {
             name: cfg.name,
             router: Address::from_str(&cfg.router)?,
             quoter: quoter_addr,
+            pool: pool_addr,
             fee: cfg.fee,
             token_a,
             token_b,
@@ -288,7 +326,7 @@ async fn main() -> Result<()> {
 
         let mut candidates = Vec::new();
 
-        // 2-Hop Logic
+        // 2-Hop
         for i in 0..pools.len() {
             for j in 0..pools.len() {
                 if i == j {
@@ -319,7 +357,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 3-Hop Logic
+        // 3-Hop
         for i in 0..pools.len() {
             let pa = &pools[i];
             if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
@@ -336,7 +374,6 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let pb = &pools[j];
-                // 强制第二跳不含 WETH，逼出真正三角
                 let pb_has_weth = pb.token_a == weth_addr_parsed || pb.token_b == weth_addr_parsed;
                 if pb_has_weth {
                     continue;
@@ -386,7 +423,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None,
+                    Err(e) => {
+                        warn!("❌ S1 Fail [{}]: {:?}", path.pools[0].name, e);
+                        return None;
+                    }
                 };
                 // Step 2
                 amt = match get_amount_out(
@@ -399,7 +439,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None,
+                    Err(e) => {
+                        warn!("❌ S2 Fail [{}]: {:?}", path.pools[1].name, e);
+                        return None;
+                    }
                 };
                 // Step 3
                 if path.is_triangle {
@@ -413,7 +456,10 @@ async fn main() -> Result<()> {
                     .await
                     {
                         Ok(a) => a,
-                        Err(_) => return None,
+                        Err(e) => {
+                            warn!("❌ S3 Fail [{}]: {:?}", path.pools[2].name, e);
+                            return None;
+                        }
                     };
                 }
                 Some((path, amt))
@@ -460,7 +506,6 @@ async fn main() -> Result<()> {
                     route_name, gross_profit, net_profit
                 );
             } else {
-                // Filter massive losses
                 if gross_profit > I256::from(-50000000000000i64) {
                     info!(
                         "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
