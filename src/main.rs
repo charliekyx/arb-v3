@@ -96,6 +96,9 @@ abigen!(
 const WETH_ADDR: &str = "0x4200000000000000000000000000000000000006";
 const USDC_ADDR: &str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const USDBC_ADDR: &str = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
+const AERO_ADDR: &str = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
+const CBETH_ADDR: &str = "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22";
+const EZETH_ADDR: &str = "0x2416092f143378750bb29b79ed961ab195cceea5";
 const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 
@@ -551,6 +554,11 @@ async fn main() -> Result<()> {
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
     let weth = Address::from_str(WETH_ADDR)?;
+    let usdc = Address::from_str(USDC_ADDR)?;
+    let usdbc = Address::from_str(USDBC_ADDR)?;
+    let aero = Address::from_str(AERO_ADDR)?;
+    let cbeth = Address::from_str(CBETH_ADDR)?;
+    let ezeth = Address::from_str(EZETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
@@ -666,6 +674,9 @@ async fn main() -> Result<()> {
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
+    // 定义所有作为起点的“基准代币”
+    let base_tokens = vec![weth, usdc, usdbc, aero, cbeth, ezeth];
+
     loop {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
@@ -691,87 +702,91 @@ async fn main() -> Result<()> {
 
         let mut candidates = Vec::new();
 
-        // 2-Hop
-        // 2-Hop 逻辑中，确保不只是 weth <-> mid <-> weth
-        // 而是可以在不同的池子间跳
-        for i in 0..pools.len() {
-            for j in 0..pools.len() {
-                if i == j {
-                    continue;
-                }
-                // 池子 A 包含 WETH，池子 B 也包含 WETH
-                if (pools[i].token_a == weth || pools[i].token_b == weth)
-                    && (pools[j].token_a == weth || pools[j].token_b == weth)
-                {
-                    let mid_i = if pools[i].token_a == weth {
-                        pools[i].token_b
-                    } else {
-                        pools[i].token_a
-                    };
-                    let mid_j = if pools[j].token_a == weth {
-                        pools[j].token_b
-                    } else {
-                        pools[j].token_a
-                    };
-
-                    // 如果两个池子的中间币是同一种（比如都是 cbETH）
-                    if mid_i == mid_j {
-                        candidates.push(ArbPath {
-                            pools: vec![pools[i].clone(), pools[j].clone()],
-                            tokens: vec![weth, mid_i, weth],
-                            is_triangle: false,
-                        });
-                    }
-                }
-            }
-        }
-        // --- 3-Hop 路径生成器优化 ---
-        for i in 0..pools.len() {
-            let pa = &pools[i];
-            if pa.token_a != weth && pa.token_b != weth {
-                continue;
-            }
-            let token_1 = if pa.token_a == weth {
-                pa.token_b
-            } else {
-                pa.token_a
-            };
-
-            for j in 0..pools.len() {
-                if i == j {
-                    continue;
-                }
-                let pb = &pools[j];
-
-                // 修正：如果 token_1 是 A，这个池子是 A/B，那么 token_2 应该拿到 B
-                if pb.token_a != token_1 && pb.token_b != token_1 {
-                    continue;
-                }
-                let token_2 = if pb.token_a == token_1 {
-                    pb.token_b
-                } else {
-                    pb.token_a
-                };
-
-                // 重点：只有当第 2 跳又回到了 WETH 时才跳过（因为那是 2-hop 的事）
-                if token_2 == weth {
-                    continue;
-                }
-
-                for k in 0..pools.len() {
-                    if k == i || k == j {
+        // 遍历所有基准代币，寻找以它为起点的套利路径
+        for &base_token in &base_tokens {
+            // 2-Hop
+            // 逻辑：base -> mid -> base
+            for i in 0..pools.len() {
+                for j in 0..pools.len() {
+                    if i == j {
                         continue;
                     }
-                    let pc = &pools[k];
-                    let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                    let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
+                    // 池子 A 包含 base_token，池子 B 也包含 base_token
+                    if (pools[i].token_a == base_token || pools[i].token_b == base_token)
+                        && (pools[j].token_a == base_token || pools[j].token_b == base_token)
+                    {
+                        let mid_i = if pools[i].token_a == base_token {
+                            pools[i].token_b
+                        } else {
+                            pools[i].token_a
+                        };
+                        let mid_j = if pools[j].token_a == base_token {
+                            pools[j].token_b
+                        } else {
+                            pools[j].token_a
+                        };
 
-                    if pc_has_token2 && pc_has_weth {
-                        candidates.push(ArbPath {
-                            pools: vec![pa.clone(), pb.clone(), pc.clone()],
-                            tokens: vec![weth, token_1, token_2, weth],
-                            is_triangle: true,
-                        });
+                        // 如果两个池子的中间币是同一种
+                        if mid_i == mid_j {
+                            candidates.push(ArbPath {
+                                pools: vec![pools[i].clone(), pools[j].clone()],
+                                tokens: vec![base_token, mid_i, base_token],
+                                is_triangle: false,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 3-Hop
+            // 逻辑：base -> token1 -> token2 -> base
+            for i in 0..pools.len() {
+                let pa = &pools[i];
+                if pa.token_a != base_token && pa.token_b != base_token {
+                    continue;
+                }
+                let token_1 = if pa.token_a == base_token {
+                    pa.token_b
+                } else {
+                    pa.token_a
+                };
+
+                for j in 0..pools.len() {
+                    if i == j {
+                        continue;
+                    }
+                    let pb = &pools[j];
+
+                    // 必须包含 token_1
+                    if pb.token_a != token_1 && pb.token_b != token_1 {
+                        continue;
+                    }
+                    let token_2 = if pb.token_a == token_1 {
+                        pb.token_b
+                    } else {
+                        pb.token_a
+                    };
+
+                    // 如果第 2 跳直接回到了 base_token，那是 2-hop，跳过
+                    if token_2 == base_token {
+                        continue;
+                    }
+
+                    for k in 0..pools.len() {
+                        if k == i || k == j {
+                            continue;
+                        }
+                        let pc = &pools[k];
+                        let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
+                        let pc_has_base = pc.token_a == base_token || pc.token_b == base_token;
+
+                        if pc_has_token2 && pc_has_base {
+                            candidates.push(ArbPath {
+                                pools: vec![pa.clone(), pb.clone(), pc.clone()],
+                                tokens: vec![base_token, token_1, token_2, base_token],
+                                is_triangle: true,
+                            });
+                        }
                     }
                 }
             }
