@@ -1057,13 +1057,21 @@ async fn main() -> Result<()> {
                                 } else {
                                     format!("{}->{}", path.pools[0].name, path.pools[1].name)
                                 };
+
+                                let net_bps: i128 = if size.as_u128() > 0 {
+                                    (net.as_i128() * 10_000i128) / (size.as_u128() as i128)
+                                } else {
+                                    0
+                                };
+
                                 best_report = format!(
-                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {})",
+                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
                                     route_name,
                                     format_token_amount(size, path.tokens[0]),
                                     gross,
                                     net,
-                                    gas_cost
+                                    gas_cost,
+                                    net_bps
                                 );
                             }
 

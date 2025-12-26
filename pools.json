@@ -120,6 +120,30 @@
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
     },
     {
+        "token_a": "0xBC45647eA894030a4E9801Ec03479739FA2485F0",
+        "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "pool": "0x0f3027d68FE4E2A56860D7B18b3D80CAe8d716D1",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_BENJI_AERO_CL_16D1",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0xBC45647eA894030a4E9801Ec03479739FA2485F0",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xeBeC4772aBA30d82bC64BBB99187B4Ca29928e2E",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_BENJI_WETH_CL_8e2E",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "pool": "0xFfa80952B3800240F11AD25E45e8d3E5C1593E70",
@@ -264,6 +288,30 @@
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
     },
     {
+        "token_a": "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xcEdF590857aE7Fbd4A342Ce9Ee9CA111570A1ca2",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_HIGHER_WETH_CL_1ca2",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xd9932A538e4c7621D9Ab1b45DE31a5D60E672B1c",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_HIGHER_WETH_CL_2B1c",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
         "token_a": "0x2Da56AcB9Ea78330f947bD57C54119Debda7AF71",
         "token_b": "0x4200000000000000000000000000000000000006",
         "pool": "0xC29dc26B28FFF463e32834Ce6325B5c74fAC7098",
@@ -355,6 +403,42 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_TOSHI_WETH_CL_628e",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x0d97F261b1e88845184f678e2d1e7a98D9FD38dE",
+        "token_b": "0x7300B37DfdfAb110d83290A29DfB31B1740219fE",
+        "pool": "0x6713AA52Cb8b743daa2A038fA2c95b6520d63298",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_TYBG_MAMO_CL_3298",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x0d97F261b1e88845184f678e2d1e7a98D9FD38dE",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x20000FbfeDFD172821821C9c59284129B04ffB2e",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_TYBG_WETH_CL_fB2e",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x0d97F261b1e88845184f678e2d1e7a98D9FD38dE",
+        "token_b": "0x74ccbe53F77b08632ce0CB91D3A545bF6B8E0979",
+        "pool": "0x124f0ABA16CBE47Cad77e3f7416532a775f4E356",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_TYBG_fBOMB_CL_E356",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
@@ -900,6 +984,18 @@
         "quoter": "0x019efF8E9B225D8Cbc6127748f5F47eA3e2F28E5"
     },
     {
+        "token_a": "0x47b464eDB8Dc9BC67b5CD4C9310BB87b773845bD",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x98433581b5420bC67FC5fD2B5f9Dd3E7cA43140b",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Sushiswap_NORMIE_WETH_V2_140b",
+        "protocol": "v2",
+        "router": "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891",
+        "quoter": "0x98433581b5420bC67FC5fD2B5f9Dd3E7cA43140b"
+    },
+    {
         "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
         "token_b": "0x4200000000000000000000000000000000000006",
         "pool": "0xbFC74e1De81E81B0A807469502F6662Cc238795e",
@@ -910,6 +1006,18 @@
         "protocol": "v2",
         "router": "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891",
         "quoter": "0xbFC74e1De81E81B0A807469502F6662Cc238795e"
+    },
+    {
+        "token_a": "0x0d97F261b1e88845184f678e2d1e7a98D9FD38dE",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xF65BB528cED09008603509c3fDa43e1cCfdDF935",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Sushiswap_TYBG_WETH_V2_F935",
+        "protocol": "v2",
+        "router": "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891",
+        "quoter": "0xF65BB528cED09008603509c3fDa43e1cCfdDF935"
     },
     {
         "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
@@ -996,6 +1104,30 @@
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
     },
     {
+        "token_a": "0x27D2DECb4bFC9C76F0309b8E88dec3a601Fe25a8",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x9E37cb775a047Ae99FC5A24dDED834127c4180cD",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Uniswap_BALD_WETH_3000_80cD",
+        "protocol": "v3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+    },
+    {
+        "token_a": "0xBC45647eA894030a4E9801Ec03479739FA2485F0",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x16905890A1D02b6F824387419319Bf4188B961b0",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Uniswap_BENJI_WETH_3000_61b0",
+        "protocol": "v3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+    },
+    {
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "pool": "0xBF0A0C12E7C0610002F6Aa6E609755EDe42D6A4d",
@@ -1039,6 +1171,18 @@
         "tick_spacing": 0,
         "pool_fee": 0,
         "name": "Uniswap_BRETT_WETH_3000_C3D8",
+        "protocol": "v3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+    },
+    {
+        "token_a": "0xebfF2db643Cf955247339c8c6bCD8406308ca437",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xd95bAe63641d822dC591bD4ACA7a64e53eaC76F9",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Uniswap_CHOMP_WETH_3000_76F9",
         "protocol": "v3",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
@@ -1128,6 +1272,18 @@
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
     },
     {
+        "token_a": "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xCC28456d4Ff980CeE3457Ca809a257E52Cd9CDb0",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Uniswap_HIGHER_WETH_3000_CDb0",
+        "protocol": "v3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+    },
+    {
         "token_a": "0x2Da56AcB9Ea78330f947bD57C54119Debda7AF71",
         "token_b": "0x50dA645f148798F68EF2d7dB7C1CB22A6819bb2C",
         "pool": "0xA6D44D25f22115e7B88646C5aCaF0370753eb1E9",
@@ -1207,6 +1363,18 @@
         "tick_spacing": 0,
         "pool_fee": 0,
         "name": "Uniswap_TOSHI_WETH_3000_C2d3",
+        "protocol": "v3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
+    },
+    {
+        "token_a": "0x0d97F261b1e88845184f678e2d1e7a98D9FD38dE",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xE745a591970e0Fa981204cf525E170a2B9e4fb93",
+        "fee": 3000,
+        "tick_spacing": 0,
+        "pool_fee": 0,
+        "name": "Uniswap_TYBG_WETH_3000_fb93",
         "protocol": "v3",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a"
