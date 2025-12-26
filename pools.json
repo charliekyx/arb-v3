@@ -52,5 +52,32 @@
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
         "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_DEGEN_1%",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
+        "protocol": "v2"
+    },
+    {
+        "name": "Uniswap_BRETT_1%",
+        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
+        "protocol": "v2"
+    },
+    {
+        "name": "Uniswap_TOSHI_1%",
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 10000,
+        "protocol": "v2"
     }
 ]
