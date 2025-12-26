@@ -60,7 +60,7 @@
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 10000,
-        "protocol": "v2"
+        "protocol": "v3"
     },
     {
         "name": "Uniswap_BRETT_1%",
@@ -69,7 +69,7 @@
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 10000,
-        "protocol": "v2"
+        "protocol": "v3"
     },
     {
         "name": "Uniswap_TOSHI_1%",
@@ -78,6 +78,6 @@
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 10000,
-        "protocol": "v2"
+        "protocol": "v3"
     }
 ]
