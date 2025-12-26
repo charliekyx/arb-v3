@@ -6,7 +6,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0xa4FDd479eda160671636e2eCF8f993Cbf86258a8",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 100,
+        "tick_spacing": 100,
+        "pool_fee": 100,
         "protocol": "cl"
     },
     {
@@ -52,7 +53,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 100,
+        "tick_spacing": 100,
+        "pool_fee": 100,
         "protocol": "cl"
     },
     {
@@ -143,7 +145,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0x98c7A2338336d2d354663246F64676009c7bDa97",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 1,
+        "tick_spacing": 1,
+        "pool_fee": 100,
         "protocol": "cl"
     },
     {
@@ -153,7 +156,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0x47cA96Ea59C13F72745928887f84C9F52C3D7348",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 1,
+        "tick_spacing": 1,
+        "pool_fee": 100,
         "protocol": "cl"
     },
     {
@@ -163,7 +167,8 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0xDC7EAd706795eDa3FEDa08Ad519d9452BAdF2C0d",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 1,
+        "tick_spacing": 1,
+        "pool_fee": 100,
         "protocol": "cl"
     }
 ]

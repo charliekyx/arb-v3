@@ -40,7 +40,9 @@ struct JsonPoolInput {
     router: String,
     quoter: Option<String>,
     pool: Option<String>,
-    fee: u32,
+    fee: Option<u32>,
+    tick_spacing: Option<i32>,
+    pool_fee: Option<u32>,
     protocol: Option<String>,
 }
 
@@ -51,6 +53,8 @@ struct PoolConfig {
     quoter: Option<Address>,
     pool: Option<Address>,
     fee: u32,
+    tick_spacing: i32,
+    pool_fee: u32,
     token_a: Address,
     token_b: Address,
     protocol: u8, // 0=V3, 1=V2, 2=CL
@@ -72,7 +76,7 @@ abigen!(
 
     ICLPool,
     r#"[
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
         function token0() external view returns (address)
     ]"#;
 
@@ -276,7 +280,7 @@ async fn get_amount_out(
                 token_in,
                 token_out,
                 amount_in,
-                fee: pool.fee,
+                fee: pool.pool_fee,
                 sqrt_price_limit_x96: U256::zero(),
             };
             if let Ok(out) = quoter.quote_exact_input_single(params).call().await {
@@ -291,7 +295,7 @@ async fn get_amount_out(
 
         // 原有的 slot0 fallback 仅用于小额“存活探测”
         let pc = ICLPool::new(pool.pool.unwrap(), client);
-        let (sqrt, _, _, _, _, _) = pc.slot_0().call().await?;
+        let (sqrt, _, _, _, _, _, _) = pc.slot_0().call().await?;
         let t0 = pc.token_0().call().await?;
         let raw = calculate_v3_amount_out(amount_in, U256::from(sqrt), token_in, t0);
         Ok(raw * (1000000 - pool.fee) / 1000000)
@@ -356,12 +360,19 @@ async fn main() -> Result<()> {
             continue;
         }
 
+        let (fee, tick_spacing, pool_fee) = match proto_code {
+            2 => (0, cfg.tick_spacing.unwrap_or(0), cfg.pool_fee.unwrap_or(0)),
+            _ => (cfg.fee.unwrap_or(3000), 0, 0),
+        };
+
         let p_config = PoolConfig {
             name: cfg.name.clone(),
             router: Address::from_str(&cfg.router)?,
             quoter: quoter_addr,
             pool: pool_addr,
-            fee: cfg.fee,
+            fee,
+            tick_spacing,
+            pool_fee,
             token_a,
             token_b,
             protocol: proto_code,
