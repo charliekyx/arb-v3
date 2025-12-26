@@ -92,12 +92,12 @@
         "protocol": "v2"
     },
     {
-        "name": "Uniswap_BRETT_USDC_0.3%",
+        "name": "Uniswap_BRETT_USDC_1%",
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
+        "fee": 10000,
         "protocol": "v3"
     },
     {
@@ -119,12 +119,12 @@
         "protocol": "v3"
     },
     {
-        "name": "Uniswap_BRETT_WETH_0.3%",
+        "name": "Uniswap_BRETT_WETH_1%",
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
+        "fee": 10000,
         "protocol": "v3"
     },
     {
