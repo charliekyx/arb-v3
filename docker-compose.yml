@@ -34,7 +34,7 @@ services:
     volumes:
       - ./mev_bot.secure:/app/mev_bot.secure:ro
       - ./data/gas_state.json:/app/gas_state.json
-      - ./data/trades.jsonl:/app/trades.jsonl
+      - ./trades.jsonl:/app/trades.jsonl
       - /home/ubuntu/node/data/geth:/app/geth_data ## ipc config
       - ./pools.json:/app/pools.json
       - ./opportunities.txt:/app/opportunities.txt
