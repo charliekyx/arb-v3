@@ -3,7 +3,7 @@ use chrono::Local;
 use cocoon::Cocoon;
 use ethers::{
     prelude::*,
-    types::{Address, I256, U256},
+    types::{transaction::eip2718::TypedTransaction, Address, I256, U256},
     utils::{format_ether, format_units, parse_ether},
 };
 use futures::stream::{self, StreamExt};
@@ -76,6 +76,9 @@ abigen!(
 
     ICLPool,
     r#"[
+        function tickSpacing() external view returns (int24)
+        function fee() external view returns (uint24)
+        function liquidity() external view returns (uint128)
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
         function token0() external view returns (address)
     ]"#;
@@ -196,6 +199,18 @@ fn calculate_v3_amount_out(
     }
 }
 
+use ethers::types::{Bytes, TransactionRequest};
+use ethers::utils::keccak256;
+async fn debug_slot0_raw(provider: &Provider<Ipc>, pool: Address) -> Result<()> {
+    let selector = &keccak256(b"slot0()")[0..4];
+    let data = Bytes::from(selector.to_vec());
+    let tx = TransactionRequest::new().to(pool).data(data);
+    let out: Bytes = provider.call(&tx.into(), None).await?;
+    info!("slot0 raw len={} bytes", out.0.len());
+    info!("slot0 raw=0x{}", hex::encode(&out.0));
+    Ok(())
+}
+
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -220,18 +235,47 @@ async fn validate_cl_pool(
         _ => {}
     }
 
-    // 2) 再测 slot0
+    // 2) 调试 slot0 raw
+    let _ = debug_slot0_raw(client.provider(), pool_addr).await;
+
+    // 3) 改用 tickSpacing/fee/liquidity 做验证
     let contract = ICLPool::new(pool_addr, client.clone());
-    match contract.slot_0().call().await {
-        Ok(_) => true,
+    let ts = match contract.tick_spacing().call().await {
+        Ok(v) => v,
         Err(e) => {
             warn!(
-                "❌ CL Pool {} slot0() failed @ {:?}: {:?}",
+                "❌ CL Pool {} tickSpacing() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
-            false
+            return false;
         }
-    }
+    };
+    let fee = match contract.fee().call().await {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(
+                "❌ CL Pool {} fee() failed @ {:?}: {:?}",
+                pool.name, pool_addr, e
+            );
+            return false;
+        }
+    };
+    let liq = match contract.liquidity().call().await {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(
+                "❌ CL Pool {} liquidity() failed @ {:?}: {:?}",
+                pool.name, pool_addr, e
+            );
+            return false;
+        }
+    };
+
+    info!(
+        "✅ CL Pool {} ok | ts={} fee={} liq={}",
+        pool.name, ts, fee, liq
+    );
+    true
 }
 
 async fn validate_v2_pool(
