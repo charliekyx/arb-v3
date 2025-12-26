@@ -3,7 +3,7 @@ use chrono::Local;
 use cocoon::Cocoon;
 use ethers::{
     prelude::*,
-    types::{Address, Bytes, U256},
+    types::{Address, U256},
     utils::{format_ether, parse_ether},
 };
 use futures::stream::{self, StreamExt};
@@ -35,7 +35,7 @@ struct JsonPoolInput {
     token_a: String,
     token_b: String,
     router: String,
-    quoter: String,
+    quoter: String, // 注意：CL 模式下这里填 Pool 地址
     fee: u32,
     protocol: Option<String>,
 }
@@ -44,7 +44,7 @@ struct JsonPoolInput {
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address,
+    quoter: Address, // CL 模式下这里是 Pool 地址
     fee: u32,
     token_other: Address,
     protocol: u8, // 0=V3, 1=V2, 2=CL
@@ -58,18 +58,18 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
-    // ✅ Uniswap V3 Quoter (V2 Interface)
+    // ✅ Uniswap V3 Quoter
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // ✅ Aerodrome Slipstream Quoter (MixedRoute Interface)
-    // 关键修复：使用 quoteExactInput 接受 bytes path
-    IMixedRouteQuoter,
+    // ✅ CL Pool Slot0 (直接读池子状态)
+    ICLPool,
     r#"[
-        function quoteExactInput(bytes path, uint256 amountIn) external returns (uint256 amountOut, uint160[] v3SqrtPriceX96AfterList, uint32[] v3InitializedTicksCrossedList, uint256 gasEstimate)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function token0() external view returns (address)
     ]"#;
 
     IAerodromePair,
@@ -120,17 +120,41 @@ impl SharedGasManager {
     }
 }
 
-// 🔥 关键辅助函数：构建 V3 Path (TokenIn + Fee + TokenOut)
-// 格式: [TokenIn 20bytes][Fee 3bytes][TokenOut 20bytes]
-fn encode_path(token_in: Address, token_out: Address, fee: u32) -> Bytes {
-    let mut path = Vec::with_capacity(43);
-    path.extend_from_slice(token_in.as_bytes());
-    // Fee 是 u24，但在 path 里是 3 bytes 大端序
-    path.push((fee >> 16) as u8);
-    path.push((fee >> 8) as u8);
-    path.push(fee as u8);
-    path.extend_from_slice(token_out.as_bytes());
-    Bytes::from(path)
+// 🔥 本地计算 sqrtPriceX96 -> Output
+// amountOut = amountIn * (sqrtPriceX96 / 2^96)^2
+// 注意：这只是瞬时价格，没算滑点，但用来做“观察者”足够且极快
+fn calculate_v3_amount_out(
+    amount_in: U256,
+    sqrt_price_x96: U256,
+    token_in: Address,
+    token0: Address,
+) -> U256 {
+    let q96 = U256::from(2).pow(U256::from(96));
+
+    // Price = (sqrtPrice / Q96)^2
+    // 如果 token_in == token0: price = token1 / token0. amountOut = amountIn * price
+    // 如果 token_in == token1: price = token0 / token1. amountOut = amountIn * (1/price)
+
+    // 为了防止溢出，使用 U256 的 mul_div
+    // amountOut = amountIn * sqrtPrice * sqrtPrice / Q96 / Q96
+
+    if token_in == token0 {
+        // Token0 -> Token1
+        // output = input * (sqrtPrice / 2^96)^2
+        // output = input * sqrtPrice * sqrtPrice / 2^192
+        let numerator = amount_in
+            .saturating_mul(sqrt_price_x96)
+            .saturating_mul(sqrt_price_x96);
+        let denominator = q96.saturating_mul(q96);
+        numerator.checked_div(denominator).unwrap_or_default()
+    } else {
+        // Token1 -> Token0
+        // output = input / (sqrtPrice / 2^96)^2
+        // output = input * 2^192 / (sqrtPrice * sqrtPrice)
+        let numerator = amount_in.saturating_mul(q96).saturating_mul(q96);
+        let denominator = sqrt_price_x96.saturating_mul(sqrt_price_x96);
+        numerator.checked_div(denominator).unwrap_or_default()
+    }
 }
 
 // 核心：通用询价函数
@@ -171,20 +195,32 @@ async fn get_amount_out(
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // --- CL Logic (Aerodrome Slipstream) -> 使用 Path 询价 ---
-        // 修复：MixedRouteQuoter 必须使用 quoteExactInput(bytes path, uint amountIn)
-        let quoter = IMixedRouteQuoter::new(pool.quoter, client);
-        let path = encode_path(token_in, token_out, pool.fee);
-
-        let (amount_out, _, _, _) = quoter
-            .quote_exact_input(path, amount_in)
+        // --- CL Logic (Aerodrome Slipstream) -> Local Calc via Slot0 ---
+        // 既然 Quoter 这么坑，我们直接读池子状态
+        // 注意：pools.json 里 CL 的 'quoter' 字段必须填【池子地址】
+        let pool_contract = ICLPool::new(pool.quoter, client.clone());
+        let (sqrt_price, _, _, _, _, _) = pool_contract
+            .slot_0()
             .call()
             .await
-            .map_err(|e| anyhow!("CL MixedRoute revert: {}", e))?;
+            .map_err(|e| anyhow!("CL slot0: {}", e))?;
+        let token0 = pool_contract
+            .token_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL token0: {}", e))?;
 
-        Ok(amount_out)
+        // 计算无滑点价格
+        let raw_out = calculate_v3_amount_out(amount_in, U256::from(sqrt_price), token_in, token0);
+
+        // 手动扣除手续费 (Aerodrome CL 费率通常是 3000 -> 0.3%)
+        // CL 的 fee 是在 swap 过程中扣除的，这里简单模拟 output * (1 - fee)
+        let fee_ppm = U256::from(pool.fee); // 假设是 3000
+        let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
+
+        Ok(out_after_fee)
     } else {
-        // --- V3 Logic (Uniswap V3) ---
+        // --- V3 Logic (Uniswap V3) -> 使用 Quoter V2 ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -193,12 +229,7 @@ async fn get_amount_out(
             fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
-        let (amount_out, _, _, _) = quoter
-            .quote_exact_input_single(params)
-            .call()
-            .await
-            .map_err(|e| anyhow!("V3 Quoter revert: {}", e))?;
-
+        let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
         Ok(amount_out)
     }
 }
@@ -208,8 +239,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.8 (MixedRoute Path Fix)");
-    info!("🔥 模式: V2(Reserves) + CL(Path) + V3(Struct)");
+    info!("🚀 System Starting: Base Bot V3.9 (Local Calc Mode)");
+    info!("🔥 模式: V2(Reserves) + CL(Slot0 Local) + V3(QuoterV2)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -297,7 +328,6 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 保留 Warn，如果这次通过了，这些日志会自动消失
                         warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
@@ -331,19 +361,16 @@ async fn main() -> Result<()> {
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
                 let net_status = if profit > parse_ether("0.00015").unwrap() {
                     "🔥[HIGH]"
                 } else {
                     "❄️[LOW]"
                 };
-
                 let log_msg = format!(
                     "[{}] 💰 PROFIT: {} -> {} | +{} ETH ({})",
                     timestamp, pa.name, pb.name, profit_eth, net_status
                 );
                 info!("{}", log_msg);
-
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
                     .append(true)
