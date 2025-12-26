@@ -110,6 +110,18 @@
     {
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "pool": "0xFfa80952B3800240F11AD25E45e8d3E5C1593E70",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_BRETT_AERO_CL_3E70",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "pool": "0x43BBb129b56A998732767725A183b7a566843dBA",
         "fee": 0,
         "tick_spacing": 1,
@@ -127,6 +139,30 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_BRETT_WETH_CL_Ba02",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x67b00B46FA4f4F24c03855c5C8013C0B938B3eEc",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_DAI_USDC_CL_3eEc",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x637ad8d2611d3efE2ef41fdBb40b9F21AbAF9585",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_DEGEN_USDC_CL_9585",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
@@ -156,6 +192,42 @@
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
     },
     {
+        "token_a": "0x4621b7A9c75199271F773Ebd9A499dbd165c3191",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x0B25c51637c43decd6CC1C1e3da4518D54ddb528",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_DOLA_USDbC_CL_b528",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x2Da56AcB9Ea78330f947bD57C54119Debda7AF71",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xC29dc26B28FFF463e32834Ce6325B5c74fAC7098",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_Mog_WETH_CL_7098",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x2Da56AcB9Ea78330f947bD57C54119Debda7AF71",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x4A311ac4563abc30E71D0631C88A6232C1309ac5",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_Mog_WETH_CL_9ac5",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
         "token_a": "0x9B5E262cF9bb04869ab40b19AF91D2dc85761722",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "pool": "0x85f1Aa3a70fEdd1C52705c15BAEd143e675CD626",
@@ -163,6 +235,42 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_NOCK_USDC_CL_D626",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x1C7a460413dD4e964f96D8dFC56E7223cE88CD85",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x42e8dC1b1891C103291Ec01D903451E729DaAACc",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_SEAM_USDbC_CL_AACc",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "pool": "0x4660Ff55A4Db144734AE76550Ee3093e0BA7F8D1",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_TOSHI_AERO_CL_F8D1",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x74E4c08Bb50619b70550733D32b7e60424E9628e",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_TOSHI_WETH_CL_628e",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
@@ -259,6 +367,18 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_WETH_USDC_CL_DC59",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x4200000000000000000000000000000000000006",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0xB4885Bc63399BF5518b994c1d0C153334Ee579D0",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_WETH_USDbC_CL_79D0",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
@@ -408,6 +528,18 @@
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
     },
     {
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A",
+        "pool": "0x24Be4F7A32E5d131B30370BC53E93661e09E7dAB",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_cbETH_weETH_CL_7dAB",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
         "token_a": "0x74ccbe53F77b08632ce0CB91D3A545bF6B8E0979",
         "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
         "pool": "0xBd1F3d188de7eE07B1b323C0D26D6720CAfB8780",
@@ -427,6 +559,42 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_rETH_wstETH_CL_2Ad5",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x1f55a02A049033E3419a8E2975cF3F572F4e6E9A",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x456c166e63634D75a4B49EDEC86cB51424D4C926",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_sfrxETH_wstETH_CL_C926",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x236aa50979D5f3De3Bd1Eeb40E81137F22ab794b",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x723AEf6543aecE026a15662Be4D3fb3424D502A9",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_tBTC_USDbC_CL_02A9",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0x9483ab65847A447e36d21af1CaB8C87e9712ff93",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x3Fc28BFac25fC8e93B5b2fc15EfBBD5a8aA44eFe",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_wUSDR_USDbC_CL_4eFe",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
@@ -457,6 +625,18 @@
     },
     {
         "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0xB79DD08EA68A908A97220C76d19A6aA9cBDE4376",
+        "pool": "0xa01A2513E95263b9BaCe60B573ce874E1e7a5246",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_wstETH_USD+_CL_5246",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
         "token_b": "0x4200000000000000000000000000000000000006",
         "pool": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
         "fee": 0,
@@ -475,6 +655,18 @@
         "tick_spacing": 1,
         "pool_fee": 100,
         "name": "Aerodrome_wstETH_WETH_CL_51e8",
+        "protocol": "cl",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
+    },
+    {
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x29BBb5F85F01702Ec85D217CEEb2d9657700cF04",
+        "fee": 0,
+        "tick_spacing": 1,
+        "pool_fee": 100,
+        "name": "Aerodrome_wstETH_WETH_CL_cF04",
         "protocol": "cl",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0"
