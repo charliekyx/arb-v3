@@ -58,10 +58,17 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
+    // ✅ Quoter V2 (用于 Uniswap V3) - 参数是结构体
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+    ]"#;
+
+    // ✅ Quoter V1 (用于 Aerodrome CL) - 参数是直接列表
+    IQuoterV1,
+    r#"[
+        function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
     ]"#;
 
     IAerodromePair,
@@ -112,25 +119,7 @@ impl SharedGasManager {
     }
 }
 
-struct NonceManager {
-    nonce: AtomicU64,
-    provider: Arc<Provider<Ipc>>,
-    address: Address,
-}
-
-impl NonceManager {
-    async fn new(provider: Arc<Provider<Ipc>>, address: Address) -> Result<Self> {
-        let start_nonce = provider.get_transaction_count(address, None).await?;
-        Ok(Self {
-            nonce: AtomicU64::new(start_nonce.as_u64()),
-            provider,
-            address,
-        })
-    }
-}
-
-// 核心：通用询价函数 (修复版)
-// 逻辑更改：如果 protocol == 1 (V2) 走 Reserve 查询；否则 (V3 或 CL) 全部走 Quoter
+// 核心：通用询价函数 (完美兼容版)
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -140,8 +129,7 @@ async fn get_amount_out(
 ) -> Result<U256> {
     if pool.protocol == 1 {
         // --- V2 Logic (Aerodrome Basic) ---
-        // V2 依然使用 Reserve 计算，因为没有 Quoter
-        let pair = IAerodromePair::new(pool.quoter, client.clone()); // 注意：对于 V2，pools.json 里的 quoter 字段填的是 Pair 地址
+        let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
             .call()
@@ -163,26 +151,35 @@ async fn get_amount_out(
             return Err(anyhow!("Empty V2 reserves"));
         }
 
-        // V2 Fee 计算 (Aerodrome Basic 通常是 0.3% 即 3000 ppm)
         let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
+    } else if pool.protocol == 2 {
+        // --- CL Logic (Aerodrome Slipstream) -> 使用 Quoter V1 ---
+        // Aerodrome CL 使用的是类似 Uniswap V3 Quoter V1 的接口 (非 Struct 参数)
+        let quoter = IQuoterV1::new(pool.quoter, client);
+
+        // 调用: quoteExactInputSingle(tokenIn, tokenOut, fee, amountIn, sqrtPriceLimitX96)
+        let amount_out = quoter
+            .quote_exact_input_single(token_in, token_out, pool.fee, amount_in, U256::zero())
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL QuoterV1 revert: {}", e))?;
+
+        Ok(amount_out)
     } else {
-        // --- V3 & CL Logic (Unified Quoter) ---
-        // 之前 CL 尝试读 slot0 手动算，导致了 "Invalid name" 错误和精度问题。
-        // 现在强制 CL (protocol 2) 和 V3 (protocol 0) 都使用 Quoter 合约。
+        // --- V3 Logic (Uniswap V3) -> 使用 Quoter V2 ---
+        // Uniswap V3 在 Base 上使用的是 Quoter V2 (Struct 参数)
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
             token_out,
             amount_in,
-            fee: pool.fee, // 注意：对于 Aerodrome CL，这里 fee 需要匹配 TickSpacing
+            fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
-
-        // 调用链上 Quoter，获取精确结果
         let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
         Ok(amount_out)
     }
@@ -193,8 +190,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.5 (Full Features - Fixed CL)");
-    info!("🔥 模式: V2(Reserves) + V3/CL(Quoter)");
+    info!("🚀 System Starting: Base Bot V3.6 (Final Fix)");
+    info!("🔥 模式: V2(Reserves) + CL(QuoterV1) + V3(QuoterV2)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -213,13 +210,14 @@ async fn main() -> Result<()> {
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
 
+        // 严格区分协议类型
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
-            1
+            1 // Aerodrome Basic
         } else if proto_str == "cl" {
-            2
+            2 // Aerodrome Slipstream (Quoter V1)
         } else {
-            0
+            0 // Uniswap V3 (Quoter V2)
         };
 
         pools.push(PoolConfig {
@@ -258,7 +256,6 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
-                // 只比较同一种 Token 的池子 (WETH <-> Token)
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -266,7 +263,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 修改：使用 0.001 ETH 进行探测，避免小池子滑点过大导致计算失败
+        // 使用 0.001 ETH 进行高频探测
         let borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
@@ -285,7 +282,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 仅在非 Revert 错误时打印警告，保持日志清爽
+                        // 调试阶段建议打开这个Warn，排错用
                         warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
@@ -302,26 +299,25 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_e) => {
-                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, _e);
+                    Err(e) => {
+                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
                 };
                 Some((pa, pb, out_eth))
             })
-            .buffer_unordered(30) // 控制并发数为 30
+            .buffer_unordered(30)
             .collect::<Vec<_>>()
             .await;
 
         info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
-                // 赚钱逻辑
+                // 🚀 盈利分支
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-                // 简单的状态标记
                 let net_status = if profit > parse_ether("0.00015").unwrap() {
                     "🔥[HIGH]"
                 } else {
@@ -334,7 +330,7 @@ async fn main() -> Result<()> {
                 );
                 info!("{}", log_msg);
 
-                // 写入文件记录
+                // 写入文件
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -343,9 +339,9 @@ async fn main() -> Result<()> {
                     let _ = writeln!(file, "{}", log_msg);
                 }
 
-                // TODO: 在这里添加 execute_trade 代码来发送交易
+                // TODO: 可以在这里加入实盘交易代码
             } else {
-                // 亏钱逻辑（观察用）
+                // 🧊 亏损分支 (仅日志)
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
