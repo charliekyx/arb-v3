@@ -5,7 +5,7 @@ import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// --- Uniswap V3 Router 接口 ---
+// --- 接口定义 ---
 interface ISwapRouter {
     struct ExactInputSingleParams {
         address tokenIn;
@@ -21,6 +21,16 @@ interface ISwapRouter {
     function exactInputSingle(
         ExactInputSingleParams calldata params
     ) external payable returns (uint256 amountOut);
+}
+
+interface IUniswapV2Router {
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
 }
 
 // --- Balancer 接口 ---
@@ -45,19 +55,18 @@ interface IVault {
 contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
     using SafeERC20 for IERC20;
 
-    // Base 链 Balancer Vault
     address private constant BALANCER_VAULT =
         0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    // Base 链 WETH
     address private constant WETH = 0x4200000000000000000000000000000000000006;
 
     address public executor;
 
     struct SwapStep {
-        address router; // V3 Router 地址
+        address router;
         address tokenIn;
         address tokenOut;
-        uint24 fee; // 500, 3000, 10000
+        uint24 fee; // V3用
+        uint8 protocol; // 0 = V3 (Uniswap), 1 = V2 (Aerodrome Classic)
     }
 
     struct ArbParams {
@@ -83,7 +92,6 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         _;
     }
 
-    // 运维函数：必须给 Router 授权
     function approveToken(
         address token,
         address spender,
@@ -147,25 +155,46 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         uint256 balanceBefore = IERC20(WETH).balanceOf(address(this));
         uint256 currentAmount = amounts[0];
 
-        // 循环执行 V3 交易
+        // 循环执行交易
         for (uint256 i = 0; i < params.steps.length; i++) {
             SwapStep memory step = params.steps[i];
 
-            ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter
-                .ExactInputSingleParams({
-                    tokenIn: step.tokenIn,
-                    tokenOut: step.tokenOut,
-                    fee: step.fee,
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: currentAmount,
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                });
+            // 授权 Router (如果还没授权)
+            // 注意：生产环境建议owner提前approve好，省gas。这里为了方便保留。
+            IERC20(step.tokenIn).approve(step.router, currentAmount);
 
-            currentAmount = ISwapRouter(step.router).exactInputSingle(
-                swapParams
-            );
+            if (step.protocol == 1) {
+                // --- V2 (Aerodrome Classic) ---
+                address[] memory path = new address[](2);
+                path[0] = step.tokenIn;
+                path[1] = step.tokenOut;
+
+                uint[] memory amountsOut = IUniswapV2Router(step.router)
+                    .swapExactTokensForTokens(
+                        currentAmount,
+                        0,
+                        path,
+                        address(this),
+                        block.timestamp
+                    );
+                currentAmount = amountsOut[amountsOut.length - 1];
+            } else {
+                // --- V3 (Uniswap) ---
+                ISwapRouter.ExactInputSingleParams
+                    memory swapParams = ISwapRouter.ExactInputSingleParams({
+                        tokenIn: step.tokenIn,
+                        tokenOut: step.tokenOut,
+                        fee: step.fee,
+                        recipient: address(this),
+                        deadline: block.timestamp,
+                        amountIn: currentAmount,
+                        amountOutMinimum: 0,
+                        sqrtPriceLimitX96: 0
+                    });
+                currentAmount = ISwapRouter(step.router).exactInputSingle(
+                    swapParams
+                );
+            }
         }
 
         uint256 balanceAfter = IERC20(WETH).balanceOf(address(this));

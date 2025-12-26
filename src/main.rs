@@ -40,7 +40,7 @@ struct JsonPoolInput {
     router: String,
     quoter: String,
     fee: u32,
-    quoter_type: Option<String>, // "v1" or "v2"
+    protocol: Option<String>, // "v2" or "v3" (default v3)
 }
 
 #[derive(Clone, Debug)]
@@ -50,28 +50,27 @@ struct PoolConfig {
     quoter: Address,
     fee: u32,
     token_other: Address,
-    quoter_type: String,
+    protocol: u8, // 0 = V3, 1 = V2
 }
 
 // --- ABI Definitions ---
 abigen!(
     FlashLoanExecutor,
     r#"[
-        struct SwapStep { address router; address tokenIn; address tokenOut; uint24 fee; }
+        struct SwapStep { address router; address tokenIn; address tokenOut; uint24 fee; uint8 protocol; }
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
-    // Uniswap V3 Quoter V2 (结构体参数)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome / Quoter V1 (扁平参数)
-    IQuoterV1,
+    // Aerodrome Classic / Uniswap V2 Router
+    IRouterV2,
     r#"[
-        function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
+        function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)
     ]"#
 );
 
@@ -132,29 +131,33 @@ impl NonceManager {
     }
 }
 
-// 核心：通用询价函数
-async fn quote_specific(
+// 核心：通用询价函数 (支持 V2 和 V3)
+async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
     token_in: Address,
     token_out: Address,
-    amount: U256,
+    amount_in: U256,
 ) -> Result<U256> {
-    if pool.quoter_type == "v1" {
-        // Aerodrome Logic
-        let quoter = IQuoterV1::new(pool.quoter, client);
-        let amount_out = quoter
-            .quote_exact_input_single(token_in, token_out, pool.fee, amount, U256::zero())
-            .call()
-            .await?;
-        Ok(amount_out)
+    if pool.protocol == 1 {
+        // --- V2 逻辑 (Aerodrome) ---
+        // 使用 Router 的 getAmountsOut，不需要 Quoter
+        let router = IRouterV2::new(pool.router, client);
+        let path = vec![token_in, token_out];
+
+        // getAmountsOut 返回数组 [amountIn, amountOut]
+        let amounts = router.get_amounts_out(amount_in, path).call().await?;
+        if amounts.len() < 2 {
+            return Err(anyhow!("Invalid V2 response"));
+        }
+        Ok(amounts[1])
     } else {
-        // Uniswap Logic
+        // --- V3 逻辑 (Uniswap) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
             token_out,
-            amount_in: amount,
+            amount_in,
             fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
@@ -168,8 +171,8 @@ async fn quote_specific(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base V3 HYBRID Bot (Verbose Mode)");
-    info!("🗣️ 模式: 打印一切结果 (V1 & V2 兼容版)");
+    info!("🚀 System Starting: Base Universal Bot (V2 + V3)");
+    info!("⚔️  支持 Uniswap V3 和 Aerodrome V2 (Classic)");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -178,7 +181,7 @@ async fn main() -> Result<()> {
     let my_addr = wallet.address();
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
 
-    let _contract_addr: Address = config.contract_address.parse()?;
+    let contract_addr: Address = config.contract_address.parse()?;
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
 
@@ -192,8 +195,17 @@ async fn main() -> Result<()> {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
-        // 默认用 v2，如果 json 写了 v1 就用 v1
-        let q_type = cfg.quoter_type.unwrap_or_else(|| "v2".to_string());
+
+        // 解析协议类型: "v2" -> 1, 其他(默认v3) -> 0
+        let proto_code = if let Some(p) = cfg.protocol {
+            if p.to_lowercase() == "v2" {
+                1
+            } else {
+                0
+            }
+        } else {
+            0
+        };
 
         pools.push(PoolConfig {
             name: cfg.name,
@@ -201,10 +213,10 @@ async fn main() -> Result<()> {
             quoter: Address::from_str(&cfg.quoter)?,
             fee: cfg.fee,
             token_other,
-            quoter_type: q_type,
+            protocol: proto_code,
         });
     }
-    info!("✅ Loaded {} V3 Pools.", pools.len());
+    info!("✅ Loaded {} Pools.", pools.len());
 
     // 3. Block Subscription
     let mut stream = client.subscribe_blocks().await?;
@@ -248,7 +260,7 @@ async fn main() -> Result<()> {
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
                 // Step A: WETH -> Token
-                let out_token = match quote_specific(
+                let out_token = match get_amount_out(
                     client_ref.clone(),
                     &pa,
                     weth_addr_parsed,
@@ -259,14 +271,16 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 打印错误，方便排查哪个池子配置还在报错
-                        warn!("⚠️ Step A Fail [{}]: {:?}", pa.name, e);
+                        // 只有严重的错误才打印，避免刷屏
+                        if !e.to_string().contains("0x") {
+                            warn!("⚠️ Step A Error [{}]: {:?}", pa.name, e);
+                        }
                         return None;
                     }
                 };
 
                 // Step B: Token -> WETH
-                let out_eth = match quote_specific(
+                let out_eth = match get_amount_out(
                     client_ref.clone(),
                     &pb,
                     pa.token_other,
@@ -277,7 +291,6 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        warn!("⚠️ Step B Fail [{}]: {:?}", pb.name, e);
                         return None;
                     }
                 };
@@ -288,19 +301,18 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>()
             .await;
 
-        // 4. 处理结果 (话痨模式)
-        info!("--- Block {} Check ---", current_bn);
+        // 4. 处理结果
+        info!("--- Block {} Scan ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
                 // 赚钱
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                let gas_cost = parse_ether("0.00015").unwrap();
-                let net_status = if profit > gas_cost {
-                    "🔥[高利]"
+                let net_status = if profit > parse_ether("0.00015").unwrap() {
+                    "🔥[HIGH]"
                 } else {
-                    "❄️[微利]"
+                    "❄️[LOW]"
                 };
 
                 let log_msg = format!(
@@ -309,7 +321,6 @@ async fn main() -> Result<()> {
                 );
                 info!("{}", log_msg);
 
-                // 写入文件
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -318,7 +329,7 @@ async fn main() -> Result<()> {
                     let _ = writeln!(file, "{}", log_msg);
                 }
             } else {
-                // 亏钱 (现在也打印出来！)
+                // 亏钱 (可选: 注释掉这行以减少刷屏)
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
