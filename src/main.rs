@@ -4,7 +4,7 @@ use cocoon::Cocoon;
 use ethers::{
     prelude::*,
     types::{Address, U256},
-    utils::{format_ether, parse_ether, parse_units},
+    utils::{format_ether, parse_ether}, // 移除了未使用的 parse_units
 };
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,9 @@ use std::{
     io::Write,
     str::FromStr,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        atomic::AtomicU64, // 移除了未使用的 Ordering
+        Arc,
+        Mutex,
     },
     time::Duration,
 };
@@ -40,17 +41,17 @@ struct JsonPoolInput {
     router: String,
     quoter: String,
     fee: u32,
-    protocol: Option<String>, // "v2" or "v3" (default v3)
+    protocol: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address,
+    quoter: Address, // 注意：对于 Aerodrome V2，这里存 Pair 地址
     fee: u32,
     token_other: Address,
-    protocol: u8, // 0 = V3, 1 = V2
+    protocol: u8, // 0 = V3, 1 = V2 (Aerodrome)
 }
 
 // --- ABI Definitions ---
@@ -67,10 +68,11 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome Classic / Uniswap V2 Router
-    IRouterV2,
+    // 通用 V2 Pair 接口 (直接查询储备量)
+    IUniswapV2Pair,
     r#"[
-        function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)
+        function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
+        function token0() external view returns (address)
     ]"#
 );
 
@@ -131,28 +133,45 @@ impl NonceManager {
     }
 }
 
-// 核心：通用询价函数 (支持 V2 和 V3)
+// 核心：通用询价函数
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
     token_in: Address,
-    token_out: Address,
+    token_out: Address, // 虽然这里没用到 token_out，但为了统一接口保留
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 逻辑 (Aerodrome) ---
-        // 使用 Router 的 getAmountsOut，不需要 Quoter
-        let router = IRouterV2::new(pool.router, client);
-        let path = vec![token_in, token_out];
+        // --- V2 逻辑 (直接问 Aerodrome Pair) ---
+        // 这里的 pool.quoter 实际上存的是 Pair 地址
+        let pair = IUniswapV2Pair::new(pool.quoter, client.clone());
 
-        // getAmountsOut 返回数组 [amountIn, amountOut]
-        let amounts = router.get_amounts_out(amount_in, path).call().await?;
-        if amounts.len() < 2 {
-            return Err(anyhow!("Invalid V2 response"));
+        // 1. 获取储备量
+        let (r0, r1, _) = pair.get_reserves().call().await?;
+        // 2. 确认 token0 是哪个 (这里修改了 token0() -> token_0())
+        let t0 = pair.token_0().call().await?;
+
+        let (reserve_in, reserve_out) = if t0 == token_in {
+            (U256::from(r0), U256::from(r1))
+        } else {
+            (U256::from(r1), U256::from(r0))
+        };
+
+        if reserve_in.is_zero() || reserve_out.is_zero() {
+            return Err(anyhow!("Empty reserves"));
         }
-        Ok(amounts[1])
+
+        // 3. 手动计算输出 (xy=k 公式)
+        // Aerodrome Volatile 费率通常是 0.3% (3000) 或用户配置的费率
+        // 费率基数 1,000,000。 fee 3000 = 0.3%
+        let fee_bps = U256::from(pool.fee);
+        let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
+        let numerator = amount_in_with_fee * reserve_out;
+        let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
+
+        Ok(numerator / denominator)
     } else {
-        // --- V3 逻辑 (Uniswap) ---
+        // --- V3 逻辑 (Uniswap Quoter) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -171,8 +190,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Universal Bot (V2 + V3)");
-    info!("⚔️  支持 Uniswap V3 和 Aerodrome V2 (Classic)");
+    info!("🚀 System Starting: Base Bot (Direct Pair Query)");
+    info!("🔥 模式: 绕过 Router，直接查询 Pair 储备量");
 
     // 1. Config
     let config = load_encrypted_config()?;
@@ -181,7 +200,7 @@ async fn main() -> Result<()> {
     let my_addr = wallet.address();
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
 
-    let contract_addr: Address = config.contract_address.parse()?;
+    let _contract_addr: Address = config.contract_address.parse()?;
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
 
@@ -196,7 +215,6 @@ async fn main() -> Result<()> {
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
 
-        // 解析协议类型: "v2" -> 1, 其他(默认v3) -> 0
         let proto_code = if let Some(p) = cfg.protocol {
             if p.to_lowercase() == "v2" {
                 1
@@ -210,7 +228,7 @@ async fn main() -> Result<()> {
         pools.push(PoolConfig {
             name: cfg.name,
             router: Address::from_str(&cfg.router)?,
-            quoter: Address::from_str(&cfg.quoter)?,
+            quoter: Address::from_str(&cfg.quoter)?, // V2模式下这里是Pair地址
             fee: cfg.fee,
             token_other,
             protocol: proto_code,
@@ -246,6 +264,7 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
+                // 必须是同一种币
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -271,10 +290,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 只有严重的错误才打印，避免刷屏
-                        if !e.to_string().contains("0x") {
-                            warn!("⚠️ Step A Error [{}]: {:?}", pa.name, e);
-                        }
+                        warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
@@ -290,7 +306,9 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(e) => {
+                    Err(_e) => {
+                        // 忽略未使用的 _e 变量警告
+                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
                 };
@@ -302,7 +320,7 @@ async fn main() -> Result<()> {
             .await;
 
         // 4. 处理结果
-        info!("--- Block {} Scan ---", current_bn);
+        info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
                 // 赚钱
@@ -329,7 +347,7 @@ async fn main() -> Result<()> {
                     let _ = writeln!(file, "{}", log_msg);
                 }
             } else {
-                // 亏钱 (可选: 注释掉这行以减少刷屏)
+                // 亏钱
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
