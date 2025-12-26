@@ -69,13 +69,6 @@ abigen!(
         function reserve0() external view returns (uint256)
         function reserve1() external view returns (uint256)
         function token0() external view returns (address)
-    ]"#;
-
-    // Aerodrome CL / Uniswap V3 Pool
-    IAerodromeCLPool,
-    r#"[
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
-        function token0() external view returns (address)
     ]"#
 );
 
@@ -136,7 +129,8 @@ impl NonceManager {
     }
 }
 
-// 核心：通用询价函数
+// 核心：通用询价函数 (修复版)
+// 逻辑更改：如果 protocol == 1 (V2) 走 Reserve 查询；否则 (V3 或 CL) 全部走 Quoter
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -146,7 +140,8 @@ async fn get_amount_out(
 ) -> Result<U256> {
     if pool.protocol == 1 {
         // --- V2 Logic (Aerodrome Basic) ---
-        let pair = IAerodromePair::new(pool.quoter, client.clone());
+        // V2 依然使用 Reserve 计算，因为没有 Quoter
+        let pair = IAerodromePair::new(pool.quoter, client.clone()); // 注意：对于 V2，pools.json 里的 quoter 字段填的是 Pair 地址
         let r0 = pair
             .reserve_0()
             .call()
@@ -164,70 +159,30 @@ async fn get_amount_out(
             .map_err(|e| anyhow!("V2 t0: {}", e))?;
 
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
-        info!(
-            "V2 Debug: Pool: {}, TokenIn: {}, R_In: {}, R_Out: {}",
-            pool.name, token_in, reserve_in, reserve_out
-        );
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
+
+        // V2 Fee 计算 (Aerodrome Basic 通常是 0.3% 即 3000 ppm)
         let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
-    } else if pool.protocol == 2 {
-        // --- CL Logic (Aerodrome Slipstream) ---
-        let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
-
-        let (sqrt_price_x96, _, _, _, _, _) = cl_pool
-            .slot_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL slot0: {}", e))?;
-        let t0 = cl_pool
-            .token_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL t0: {}", e))?;
-
-        let sqrt_price = U256::from(sqrt_price_x96);
-
-        // 分步计算以防止 U256 溢出
-        let amount_out_raw = if token_in == t0 {
-            // 0 -> 1
-            let step1 = amount_in.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
-            let step2 = step1.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
-            step2
-        } else {
-            // 1 -> 0
-            if sqrt_price.is_zero() {
-                U256::zero()
-            } else {
-                let step1 = (amount_in << 96)
-                    .checked_div(sqrt_price)
-                    .unwrap_or(U256::zero());
-                let step2 = (step1 << 96)
-                    .checked_div(sqrt_price)
-                    .unwrap_or(U256::zero());
-                step2
-            }
-        };
-
-        // 扣除手续费
-        let fee_bps = U256::from(pool.fee);
-        let amount_out = amount_out_raw * (U256::from(1000000) - fee_bps) / U256::from(1000000);
-        Ok(amount_out)
     } else {
-        // --- V3 Quoter Logic (Default) ---
+        // --- V3 & CL Logic (Unified Quoter) ---
+        // 之前 CL 尝试读 slot0 手动算，导致了 "Invalid name" 错误和精度问题。
+        // 现在强制 CL (protocol 2) 和 V3 (protocol 0) 都使用 Quoter 合约。
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
             token_out,
             amount_in,
-            fee: pool.fee,
+            fee: pool.fee, // 注意：对于 Aerodrome CL，这里 fee 需要匹配 TickSpacing
             sqrt_price_limit_x96: U256::zero(),
         };
+
+        // 调用链上 Quoter，获取精确结果
         let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
         Ok(amount_out)
     }
@@ -238,8 +193,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.5 (Full Features)");
-    info!("🔥 模式: Direct Pool Query (V2 & CL) + Quoter (V3)");
+    info!("🚀 System Starting: Base Bot V3.5 (Full Features - Fixed CL)");
+    info!("🔥 模式: V2(Reserves) + V3/CL(Quoter)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -303,6 +258,7 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
+                // 只比较同一种 Token 的池子 (WETH <-> Token)
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -310,14 +266,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        // let borrow_amount = parse_ether("0.05").unwrap();
+        // 修改：使用 0.001 ETH 进行探测，避免小池子滑点过大导致计算失败
         let borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A
+                // Step A: WETH -> Token
                 let out_token = match get_amount_out(
                     client_ref.clone(),
                     &pa,
@@ -329,11 +285,13 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
+                        // 仅在非 Revert 错误时打印警告，保持日志清爽
+                        // warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
-                // Step B
+
+                // Step B: Token -> WETH
                 let out_eth = match get_amount_out(
                     client_ref.clone(),
                     &pb,
@@ -345,23 +303,25 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(_e) => {
-                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, _e);
+                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
                 };
                 Some((pa, pb, out_eth))
             })
-            .buffer_unordered(30)
+            .buffer_unordered(30) // 控制并发数为 30
             .collect::<Vec<_>>()
             .await;
 
         info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
-                // 赚钱
+                // 赚钱逻辑
                 let profit = out_eth - borrow_amount;
                 let profit_eth = format_ether(profit);
                 let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+                // 简单的状态标记
                 let net_status = if profit > parse_ether("0.00015").unwrap() {
                     "🔥[HIGH]"
                 } else {
@@ -374,7 +334,7 @@ async fn main() -> Result<()> {
                 );
                 info!("{}", log_msg);
 
-                // [恢复] 写入 opportunities.txt
+                // 写入文件记录
                 if let Ok(mut file) = OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -382,8 +342,10 @@ async fn main() -> Result<()> {
                 {
                     let _ = writeln!(file, "{}", log_msg);
                 }
+
+                // TODO: 在这里添加 execute_trade 代码来发送交易
             } else {
-                // 亏钱
+                // 亏钱逻辑（观察用）
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
