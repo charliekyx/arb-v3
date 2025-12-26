@@ -9,6 +9,8 @@ use ethers::{
     utils::{format_ether, format_units, parse_ether, parse_units},
 };
 use futures::stream::{self, StreamExt};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -477,19 +479,34 @@ async fn validate_v2_pool(
     }
 }
 
-fn get_v2_amount_out_local(
-    amount_in: U256,
-    reserve_in: U256,
-    reserve_out: U256,
-    fee_bps: u32,
-) -> U256 {
-    if amount_in.is_zero() {
-        return U256::zero();
+fn send_email_alert(subject: &str, body: &str) {
+    let email_user = "charlieyuxx@gmail.com";
+    let email_pass = "sabw gnll hfuq yesl";
+    let email_to = "charlieyuxx@gmail.com";
+
+    let email = match Message::builder()
+        .from(email_user.parse().unwrap())
+        .to(email_to.parse().unwrap())
+        .subject(subject)
+        .body(body.to_string())
+    {
+        Ok(e) => e,
+        Err(e) => {
+            error!("❌ Email build failed: {:?}", e);
+            return;
+        }
+    };
+
+    let creds = Credentials::new(email_user.to_string(), email_pass.to_string());
+    let mailer = SmtpTransport::relay("smtp.gmail.com")
+        .unwrap()
+        .credentials(creds)
+        .build();
+
+    match mailer.send(&email) {
+        Ok(_) => info!("📧 Email sent successfully!"),
+        Err(e) => error!("❌ Could not send email: {:?}", e),
     }
-    let amount_in_with_fee = amount_in * U256::from(10000 - fee_bps);
-    let numerator = amount_in_with_fee * reserve_out;
-    let denominator = (reserve_in * 10000) + amount_in_with_fee;
-    numerator.checked_div(denominator).unwrap_or_default()
 }
 
 async fn get_amount_out(
@@ -509,36 +526,12 @@ async fn get_amount_out(
     }
     if pool.protocol == 1 {
         let pair = IAerodromePair::new(pool.quoter.unwrap(), client);
-        let (r0, r1, _) = pair
-            .get_reserves()
+        // 只信链上给的结果，不信本地算的
+        return pair
+            .get_amount_out(amount_in, token_in)
             .call()
             .await
-            .map_err(|e| anyhow!("V2 getReserves failed: {}", e))?;
-
-        let token0 = if pool.token_a < pool.token_b {
-            pool.token_a
-        } else {
-            pool.token_b
-        };
-        let (reserve_in, reserve_out) = if token_in == token0 {
-            (r0, r1)
-        } else {
-            (r1, r0)
-        };
-
-        // BaseSwap usually 0.25% (25 bps), others 0.3% (30 bps)
-        let fee_bps = if pool.name.to_lowercase().contains("baseswap") {
-            25
-        } else {
-            30
-        };
-
-        Ok(get_v2_amount_out_local(
-            amount_in,
-            reserve_in,
-            reserve_out,
-            fee_bps,
-        ))
+            .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
     } else if pool.protocol == 2 {
         let q = pool
             .quoter
@@ -590,6 +583,7 @@ async fn main() -> Result<()> {
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let pool_failures: Arc<DashMap<String, u32>> = Arc::new(DashMap::new());
+    let profitable_history: Arc<DashMap<String, (u64, u32)>> = Arc::new(DashMap::new());
     let mut probed_quoters = std::collections::HashSet::new();
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
@@ -682,43 +676,6 @@ async fn main() -> Result<()> {
     }
     info!("✅ Active Pools: {}", pools.len());
 
-    // 1. "Big Cleanup": Remove pools that fail a tiny quote
-    info!("🧹 Starting Pre-flight Cleanup (Removing dead pools)...");
-    let mut clean_pools = Vec::new();
-
-    for pool in pools {
-        // For V2, we trust validate_v2_pool (getReserves check)
-        if pool.protocol == 1 {
-            clean_pools.push(pool);
-            continue;
-        }
-
-        // For V3/CL, probe with tiny amount
-        let test_amount = if pool.token_a == usdc || pool.token_b == usdc {
-            parse_units("0.1", 6).unwrap().into()
-        } else {
-            parse_units("0.0001", 18).unwrap().into()
-        };
-
-        // Try swap token_a -> token_b
-        if get_amount_out(
-            client.clone(),
-            &pool,
-            pool.token_a,
-            pool.token_b,
-            test_amount,
-        )
-        .await
-        .is_ok()
-        {
-            clean_pools.push(pool);
-        } else {
-            warn!("🗑️ Removing dead pool [{}]: Quote failed", pool.name);
-        }
-    }
-    pools = clean_pools;
-    info!("✨ Cleanup Complete. Valid Pools: {}", pools.len());
-
     // --- Static Probe for CL Quoter ---
     // AERO/USDC CL: 100 USDC -> AERO
     /*
@@ -764,6 +721,7 @@ async fn main() -> Result<()> {
             }
         };
         let current_bn = block.number.unwrap();
+        let block_number = current_bn.as_u64();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached.");
@@ -924,6 +882,7 @@ async fn main() -> Result<()> {
         let profitable_paths_ref = profitable_paths.clone();
         let failed_paths_ref = failed_paths.clone();
         let pool_failures_ref = pool_failures.clone();
+        let profitable_history_ref = profitable_history.clone();
 
         // 核心逻辑：遍历 candidates 路径
         stream::iter(candidates)
@@ -932,6 +891,7 @@ async fn main() -> Result<()> {
                 let profitable_paths = profitable_paths_ref.clone();
                 let failed_paths = failed_paths_ref.clone();
                 let pool_failures = pool_failures_ref.clone();
+                let profitable_history = profitable_history_ref.clone();
                 async move {
                     let mut path_is_ok = false;
                     let mut path_is_profitable = false;
@@ -960,7 +920,6 @@ async fn main() -> Result<()> {
                             parse_amount("1", start_token),
                             parse_amount("2", start_token),
                             parse_amount("5", start_token),
-                            parse_amount("10", start_token),
                         ]
                     };
 
@@ -1057,34 +1016,18 @@ async fn main() -> Result<()> {
                                 } else {
                                     format!("{}->{}", path.pools[0].name, path.pools[1].name)
                                 };
-
-                                let net_bps: i128 = if size.as_u128() > 0 {
-                                    (net.as_i128() * 10_000i128) / (size.as_u128() as i128)
-                                } else {
-                                    0
-                                };
-
                                 best_report = format!(
-                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
+                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {})",
                                     route_name,
                                     format_token_amount(size, path.tokens[0]),
                                     gross,
                                     net,
-                                    gas_cost,
-                                    net_bps
+                                    gas_cost
                                 );
                             }
 
-                            // 3. 统一计价：用 Net(BPS) 判定盈利
-                            let net_is_profitable = if start_token == usdc || start_token == usdbc {
-                                net > I256::from(1000) // 盈利超过 0.001 USDC
-                            } else if start_token == weth {
-                                net > I256::from(1_000_000_000_000i128) // 盈利超过 0.000001 ETH
-                            } else {
-                                gross > I256::zero() // 其他币种暂时看毛利
-                            };
-
-                            if net_is_profitable {
+                            // 3. 只有 Net > 0 才算 Profitable (且记录 Opportunity)
+                            if can_price_gas && net > I256::zero() {
                                 if !path_is_profitable {
                                     profitable_paths.fetch_add(1, Ordering::Relaxed);
                                     path_is_profitable = true;
@@ -1108,6 +1051,42 @@ async fn main() -> Result<()> {
 
                                 info!("{}", report);
                                 append_log_to_file(&report);
+
+                                // 4. 邮件报警逻辑：连续 2 个区块盈利才发送
+                                let route_key = if path.is_triangle {
+                                    format!(
+                                        "{}->{}->{}",
+                                        path.pools[0].name, path.pools[1].name, path.pools[2].name
+                                    )
+                                } else {
+                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
+                                };
+
+                                let mut count = 1;
+                                {
+                                    let mut entry =
+                                        profitable_history.entry(route_key).or_insert((0, 0));
+                                    if entry.0 == block_number - 1 {
+                                        entry.1 += 1; // 连续区块
+                                        entry.0 = block_number;
+                                    } else if entry.0 < block_number - 1 {
+                                        entry.1 = 1; // 中断了，重置
+                                        entry.0 = block_number;
+                                    }
+                                    // 如果 entry.0 == block_number，说明本区块已经计数过（可能是不同 size），保持不变
+                                    count = entry.1;
+                                }
+
+                                if count >= 2 {
+                                    let subject = format!(
+                                        "🚀 Arbitrage Opportunity (Block {})",
+                                        block_number
+                                    );
+                                    let body = report.clone();
+                                    tokio::task::spawn_blocking(move || {
+                                        send_email_alert(&subject, &body)
+                                    });
+                                }
                             }
                         }
                     }
