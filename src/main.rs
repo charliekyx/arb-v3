@@ -81,7 +81,6 @@ abigen!(
         function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast)
         function token0() external view returns (address)
         function token1() external view returns (address)
-        function stable() external view returns (bool)
         function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256 amountOut)
     ]"#
 );
@@ -197,28 +196,15 @@ async fn validate_v2_pool(
     if let Some(pair_addr) = pool.quoter {
         let pair = IAerodromePair::new(pair_addr, client.clone());
 
-        // 🔥 探测点：只要能读到 Reserves，就证明这是一个有效的 V2 池
-        // 不要去调 token0/1 了，有些 Stable 池的实现可能在签名上有细微差别
-        if pair.get_reserves().call().await.is_ok() {
-            return true;
+        // 🔥 最终方案：只要 getReserves 能调通，说明它就是个 V2 池，直接放行
+        // 不再测试 getAmountOut，因为本金太小或太大都可能导致它 revert
+        match pair.get_reserves().call().await {
+            Ok(_) => true,
+            Err(e) => {
+                warn!("❌ Pool {} failed getReserves: {:?}", pool.name, e);
+                false
+            }
         }
-
-        // 备选探测：尝试询价 1 ETH
-        let test_amount = parse_ether("1.0").unwrap();
-        if pair
-            .get_amount_out(test_amount, pool.token_a)
-            .call()
-            .await
-            .is_ok()
-        {
-            return true;
-        }
-
-        warn!(
-            "❌ Pool {} failed validation (No Reserves & No Quote)",
-            pool.name
-        );
-        false
     } else {
         false
     }
