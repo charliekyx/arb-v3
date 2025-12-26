@@ -4,7 +4,7 @@ use cocoon::Cocoon;
 use ethers::{
     prelude::*,
     types::{Address, U256},
-    utils::{format_ether, parse_ether},
+    utils::{format_units, parse_ether}, // Added format_units
 };
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ struct JsonPoolInput {
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address, // CL Use Pool Address here
+    quoter: Address, // Now strictly a Quoter Contract Address
     fee: u32,
     token_a: Address,
     token_b: Address,
@@ -62,12 +62,6 @@ abigen!(
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
-    ]"#;
-
-    ICLPool,
-    r#"[
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
-        function token0() external view returns (address)
     ]"#;
 
     IAerodromePair,
@@ -118,27 +112,6 @@ impl SharedGasManager {
     }
 }
 
-// Local Calc V3 Price
-fn calculate_v3_amount_out(
-    amount_in: U256,
-    sqrt_price_x96: U256,
-    token_in: Address,
-    token0: Address,
-) -> U256 {
-    let q96 = U256::from(2).pow(U256::from(96));
-    if token_in == token0 {
-        let numerator = amount_in
-            .saturating_mul(sqrt_price_x96)
-            .saturating_mul(sqrt_price_x96);
-        let denominator = q96.saturating_mul(q96);
-        numerator.checked_div(denominator).unwrap_or_default()
-    } else {
-        let numerator = amount_in.saturating_mul(q96).saturating_mul(q96);
-        let denominator = sqrt_price_x96.saturating_mul(sqrt_price_x96);
-        numerator.checked_div(denominator).unwrap_or_default()
-    }
-}
-
 // Core Quote Function
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
@@ -148,7 +121,7 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // V2 Logic
+        // --- V2 Logic ---
         let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
@@ -176,26 +149,9 @@ async fn get_amount_out(
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
-    } else if pool.protocol == 2 {
-        // CL Logic (Local Calc)
-        let pool_contract = ICLPool::new(pool.quoter, client.clone());
-        let (sqrt_price, _, _, _, _, _) = pool_contract
-            .slot_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL slot0: {}", e))?;
-        let token0 = pool_contract
-            .token_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL token0: {}", e))?;
-
-        let raw_out = calculate_v3_amount_out(amount_in, U256::from(sqrt_price), token_in, token0);
-        let fee_ppm = U256::from(pool.fee);
-        let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
-        Ok(out_after_fee)
     } else {
-        // V3 Logic (QuoterV2)
+        // --- V3 & CL Logic (Unified via QuoterV2) ---
+        // 现在 CL 和 V3 都使用相同的 QuoterV2 接口和地址
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -209,13 +165,21 @@ async fn get_amount_out(
     }
 }
 
+// Struct to hold a trade path (2-hop or 3-hop)
+#[derive(Clone)]
+struct ArbPath {
+    pools: Vec<PoolConfig>,
+    tokens: Vec<Address>, // sequence of tokens: [In, Mid1, (Mid2), Out]
+    is_triangle: bool,
+}
+
 // --- Main ---
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V4.0 (Triangle + Net Profit)");
-    info!("🔥 Features: 2-Hop & 3-Hop Search | Gas Estimation");
+    info!("🚀 System Starting: Base Bot V5.0 (True Triangle & Real Quoter)");
+    info!("🔥 Features: V2/V3/CL Unified Quoting + 2-Hop & 3-Hop Search");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -231,7 +195,7 @@ async fn main() -> Result<()> {
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
-        // 注意：这里不再只存 token_other，而是存完整的 pair 以便三角套利
+
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
             1
@@ -275,26 +239,18 @@ async fn main() -> Result<()> {
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
-        // 1. Fetch Gas Price (Dynamic)
+        // 1. Fetch Gas Price
         let gas_price = provider
             .get_gas_price()
             .await
-            .unwrap_or(parse_ether("0.0000000001").unwrap()); // Default 0.1 gwei
+            .unwrap_or(parse_ether("0.0000000001").unwrap());
+        let gas_cost_2hop = (gas_price * U256::from(250_000)).as_u128();
+        let gas_cost_3hop = (gas_price * U256::from(350_000)).as_u128();
 
-        // 估算 Gas Cost (Base L2 Cost ~ 0.05 - 0.15 USD)
-        // 假设 2-Hop 消耗 250k Gas, 3-Hop 消耗 350k Gas
-        let gas_cost_2hop = gas_price * U256::from(250_000);
-        let gas_cost_3hop = gas_price * U256::from(350_000);
+        // 2. Build Candidates (Dynamic 2-Hop & 3-Hop)
+        let mut candidates = Vec::new();
 
-        // --- Build Strategy Candidates ---
-        // A. 2-Hop (WETH -> PoolA -> PoolB -> WETH)
-        // B. 3-Hop (WETH -> PoolA -> PoolB -> PoolC -> WETH)
-
-        // 由于这很耗时，实际工程中通常预先计算好 Path。这里为了代码简洁直接循环生成。
-        // 这里简化演示，只保留 2-Hop，重点展示 Net Profit 计算。
-        // 若要开启三角，需要 O(N^3) 的遍历，需谨慎。
-
-        let mut candidates_2hop = Vec::new();
+        // --- 2-Hop Generation ---
         for i in 0..pools.len() {
             for j in 0..pools.len() {
                 if i == j {
@@ -303,105 +259,185 @@ async fn main() -> Result<()> {
                 let pa = &pools[i];
                 let pb = &pools[j];
 
-                // 确保路径连通: WETH -> (A) -> TokenX -> (B) -> WETH
-                // 需要判断 pa 是否包含 WETH，且 pa 和 pb 共享另一种 Token
-
-                let pa_has_weth = pa.token_a == weth_addr_parsed || pa.token_b == weth_addr_parsed;
-                let pb_has_weth = pb.token_a == weth_addr_parsed || pb.token_b == weth_addr_parsed;
-
-                if !pa_has_weth || !pb_has_weth {
+                // Route: WETH -> (Pool A) -> TokenMid -> (Pool B) -> WETH
+                // Check if PA contains WETH
+                let start_token = weth_addr_parsed;
+                if pa.token_a != start_token && pa.token_b != start_token {
                     continue;
                 }
-
-                // 找出中间代币
-                let pa_other = if pa.token_a == weth_addr_parsed {
+                let token_mid = if pa.token_a == start_token {
                     pa.token_b
                 } else {
                     pa.token_a
                 };
-                let pb_other = if pb.token_a == weth_addr_parsed {
-                    pb.token_b
-                } else {
-                    pb.token_a
-                };
 
-                if pa_other == pb_other {
-                    candidates_2hop.push((pa.clone(), pb.clone(), pa_other));
+                // Check if PB connects TokenMid back to WETH
+                let pb_has_mid = pb.token_a == token_mid || pb.token_b == token_mid;
+                let pb_has_end = pb.token_a == start_token || pb.token_b == start_token;
+
+                if pb_has_mid && pb_has_end {
+                    candidates.push(ArbPath {
+                        pools: vec![pa.clone(), pb.clone()],
+                        tokens: vec![start_token, token_mid, start_token],
+                        is_triangle: false,
+                    });
                 }
             }
         }
 
-        // --- Execution Loop ---
-        let results = stream::iter(candidates_2hop)
-            .map(|(pa, pb, token_mid)| async move {
-                // Step 1: WETH -> TokenMid (Pool A)
-                let out_1 = match get_amount_out(
+        // --- 3-Hop (Triangle) Generation ---
+        // WETH -> (Pool A) -> TokenX -> (Pool B) -> TokenY -> (Pool C) -> WETH
+        // Only run this if you have pools connecting two non-WETH tokens (e.g. USDC-AERO)
+        // With current 14 pools (mostly WETH pairs), this loop might not find many, but logic is ready.
+        for i in 0..pools.len() {
+            let pa = &pools[i];
+            if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
+                continue;
+            }
+            let token_1 = if pa.token_a == weth_addr_parsed {
+                pa.token_b
+            } else {
+                pa.token_a
+            }; // Token X
+
+            for j in 0..pools.len() {
+                if i == j {
+                    continue;
+                }
+                let pb = &pools[j];
+                // PB must connect Token X -> Token Y
+                if pb.token_a != token_1 && pb.token_b != token_1 {
+                    continue;
+                }
+                let token_2 = if pb.token_a == token_1 {
+                    pb.token_b
+                } else {
+                    pb.token_a
+                }; // Token Y
+
+                if token_2 == weth_addr_parsed {
+                    continue;
+                } // Back to WETH is 2-hop, skip
+
+                for k in 0..pools.len() {
+                    if k == i || k == j {
+                        continue;
+                    }
+                    let pc = &pools[k];
+                    // PC must connect Token Y -> WETH
+                    let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
+                    let pc_has_weth =
+                        pc.token_a == weth_addr_parsed || pc.token_b == weth_addr_parsed;
+
+                    if pc_has_token2 && pc_has_weth {
+                        candidates.push(ArbPath {
+                            pools: vec![pa.clone(), pb.clone(), pc.clone()],
+                            tokens: vec![weth_addr_parsed, token_1, token_2, weth_addr_parsed],
+                            is_triangle: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        let results = stream::iter(candidates)
+            .map(|path| async move {
+                let mut current_amount = borrow_amount;
+
+                // Step 1
+                current_amount = match get_amount_out(
                     client_ref.clone(),
-                    &pa,
-                    weth_addr_parsed,
-                    token_mid,
-                    borrow_amount,
+                    &path.pools[0],
+                    path.tokens[0],
+                    path.tokens[1],
+                    current_amount,
                 )
                 .await
                 {
                     Ok(a) => a,
                     Err(_) => return None,
                 };
-
-                // Step 2: TokenMid -> WETH (Pool B)
-                let out_2 = match get_amount_out(
+                // Step 2
+                current_amount = match get_amount_out(
                     client_ref.clone(),
-                    &pb,
-                    token_mid,
-                    weth_addr_parsed,
-                    out_1,
+                    &path.pools[1],
+                    path.tokens[1],
+                    path.tokens[2],
+                    current_amount,
                 )
                 .await
                 {
                     Ok(a) => a,
                     Err(_) => return None,
                 };
+                // Step 3 (if triangle)
+                if path.is_triangle {
+                    current_amount = match get_amount_out(
+                        client_ref.clone(),
+                        &path.pools[2],
+                        path.tokens[2],
+                        path.tokens[3],
+                        current_amount,
+                    )
+                    .await
+                    {
+                        Ok(a) => a,
+                        Err(_) => return None,
+                    };
+                }
 
-                Some((pa, pb, out_2))
+                Some((path, current_amount))
             })
             .buffer_unordered(20)
             .collect::<Vec<_>>()
             .await;
 
+        let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
         info!(
-            "--- Block {} | Gas: {} Gwei ---",
+            "--- Block {} | Gas: {} gwei | Paths: {} ---",
             current_bn,
-            format_ether(gas_price * U256::from(1_000_000_000))
+            gas_gwei,
+            results.len()
         );
 
-        for (pa, pb, out_eth) in results.into_iter().flatten() {
-            // Gross Profit
+        for (path, out_eth) in results.into_iter().flatten() {
+            // Profit Calc
             let gross_profit = if out_eth > borrow_amount {
-                I256::from_raw(out_eth) - I256::from_raw(borrow_amount)
+                I256::from((out_eth - borrow_amount).as_u128())
             } else {
-                I256::from_raw(out_eth) - I256::from_raw(borrow_amount) // Negative
+                -I256::from((borrow_amount - out_eth).as_u128())
             };
 
-            // Net Profit
-            let net_profit = gross_profit - I256::from_raw(gas_cost_2hop);
+            let gas_cost = if path.is_triangle {
+                gas_cost_3hop
+            } else {
+                gas_cost_2hop
+            };
+            let net_profit = gross_profit - I256::from(gas_cost);
+
+            // Logging
+            let route_name = if path.is_triangle {
+                format!(
+                    "{}->{}->{}",
+                    path.pools[0].name, path.pools[1].name, path.pools[2].name
+                )
+            } else {
+                format!("{}->{}", path.pools[0].name, path.pools[1].name)
+            };
 
             if net_profit > I256::from(0) {
-                // 真正赚到钱了（扣除 Gas 后）
                 let log_msg = format!(
-                    "💰 NET PROFIT: {} -> {} | Gross: {} | Net: {} WEI",
-                    pa.name, pb.name, gross_profit, net_profit
+                    "💰 NET PROFIT: {} | Gross: {} | Net: {} WEI",
+                    route_name, gross_profit, net_profit
                 );
                 info!("{}", log_msg);
-
-                // TODO: Execute Trade Logic Here
+                // TODO: Execute Logic Here
             } else {
-                // 观察模式：只打印 Gross 亏损较小的，或者稍微亏损的 Net
-                // 过滤掉那些 massive loss
-                if gross_profit > I256::from(-50000000000000i64) {
-                    // Filter out massive losses
+                // Only show relevant losses to avoid spam
+                if gross_profit > I256::from(-1000000000000000i64) {
                     info!(
-                        "🧊 WATCH: {} -> {} | Gross: {} | Net: {} (Gas: {})",
-                        pa.name, pb.name, gross_profit, net_profit, gas_cost_2hop
+                        "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
+                        route_name, gross_profit, net_profit, gas_cost
                     );
                 }
             }
