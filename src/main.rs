@@ -3,8 +3,8 @@ use chrono::Local;
 use cocoon::Cocoon;
 use ethers::{
     prelude::*,
-    types::{Address, U256},
-    utils::{format_units, parse_ether},
+    types::{Address, I256, U256},
+    utils::{format_ether, format_units, parse_ether},
 };
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,10 @@ use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     time::Duration,
 };
 use tracing::{error, info, warn};
@@ -145,7 +148,7 @@ impl SharedGasManager {
 
 // 恢复：追加日志到本地文件
 fn append_log_to_file(msg: &str) {
-    let file_path = "opportunities.log";
+    let file_path = "opportunities.txt";
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(file, "[{}] {}", timestamp, msg);
@@ -224,12 +227,13 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        let pair_addr = pool.quoter.ok_or(anyhow!("V2 missing pair address"))?;
-        let pair = IAerodromePair::new(pair_addr, client.clone());
-        match pair.get_amount_out(amount_in, token_in).call().await {
-            Ok(out) => Ok(out),
-            Err(e) => Err(anyhow!("V2 on-chain quote failed: {}", e)),
-        }
+        let pair = IAerodromePair::new(pool.quoter.unwrap(), client);
+        // 只信链上给的结果，不信本地算的
+        return pair
+            .get_amount_out(amount_in, token_in)
+            .call()
+            .await
+            .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
     } else if pool.protocol == 2 {
         if let Some(quoter_addr) = pool.quoter {
             let quoter = IMixedRouteQuoterV1::new(quoter_addr, client.clone());
@@ -355,6 +359,14 @@ async fn main() -> Result<()> {
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
+    let test_sizes = [
+        parse_ether("0.1").unwrap(),
+        parse_ether("0.5").unwrap(),
+        parse_ether("1.0").unwrap(),
+        parse_ether("2.0").unwrap(),
+        parse_ether("5.0").unwrap(),
+    ];
+
     loop {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
@@ -465,119 +477,117 @@ async fn main() -> Result<()> {
         }
 
         let total_candidates = candidates.len();
-        let results = stream::iter(candidates)
-            .map(|path| async move {
-                let mut amt = borrow_amount;
-                // Step 1
-                amt = match get_amount_out(
-                    client_ref.clone(),
-                    &path.pools[0],
-                    path.tokens[0],
-                    path.tokens[1],
-                    amt,
-                )
-                .await
-                {
-                    Ok(a) => a,
-                    Err(e) => {
-                        warn!("❌ S1 Fail [{}]: {:?}", path.pools[0].name, e);
-                        return None;
-                    }
-                };
-                // Step 2
-                amt = match get_amount_out(
-                    client_ref.clone(),
-                    &path.pools[1],
-                    path.tokens[1],
-                    path.tokens[2],
-                    amt,
-                )
-                .await
-                {
-                    Ok(a) => a,
-                    Err(e) => {
-                        warn!("❌ S2 Fail [{}]: {:?}", path.pools[1].name, e);
-                        return None;
-                    }
-                };
-                // Step 3
-                if path.is_triangle {
-                    amt = match get_amount_out(
-                        client_ref.clone(),
-                        &path.pools[2],
-                        path.tokens[2],
-                        path.tokens[3],
-                        amt,
-                    )
-                    .await
-                    {
-                        Ok(a) => a,
-                        Err(e) => {
-                            warn!("❌ S3 Fail [{}]: {:?}", path.pools[2].name, e);
-                            return None;
+        let ok_paths = Arc::new(AtomicUsize::new(0));
+        let ok_paths_ref = ok_paths.clone();
+
+        // 核心逻辑：遍历 candidates 路径
+        stream::iter(candidates)
+            .for_each_concurrent(10, |path| {
+                let ok_paths = ok_paths_ref.clone();
+                async move {
+                    let mut path_profitable = false;
+                    // 🔥 局部改动：针对每条路径，跑遍所有资金档位
+                    for size in test_sizes {
+                        let mut current_amt = size;
+                        let mut step_results = Vec::new();
+                        let mut failed = false;
+
+                        // 逐跳获取报价
+                        for i in 0..path.pools.len() {
+                            match get_amount_out(
+                                client_ref.clone(),
+                                &path.pools[i],
+                                path.tokens[i],
+                                path.tokens[i + 1],
+                                current_amt,
+                            )
+                            .await
+                            {
+                                Ok(out) => {
+                                    step_results.push((
+                                        current_amt,
+                                        out,
+                                        path.pools[i].name.clone(),
+                                    ));
+                                    current_amt = out;
+                                }
+                                Err(_) => {
+                                    failed = true;
+                                    break;
+                                }
+                            }
                         }
-                    };
+
+                        if !failed {
+                            // 计算毛利
+                            let gross = if current_amt > size {
+                                I256::from((current_amt - size).as_u128())
+                            } else {
+                                -I256::from((size - current_amt).as_u128())
+                            };
+
+                            // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
+                            let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
+                            let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
+                            let net = gross - gas_cost;
+
+                            let route_name = if path.is_triangle {
+                                format!(
+                                    "{}->{}->{}",
+                                    path.pools[0].name, path.pools[1].name, path.pools[2].name
+                                )
+                            } else {
+                                format!("{}->{}", path.pools[0].name, path.pools[1].name)
+                            };
+
+                            info!(
+                                "🧊 WATCH: {} | Size: {} | Gross: {} | Net: {} (Gas: {})",
+                                route_name,
+                                format_ether(size),
+                                gross,
+                                net,
+                                gas_cost
+                            );
+
+                            // 只要毛利为正，就记录“证据”
+                            if gross > I256::zero() {
+                                if !path_profitable {
+                                    ok_paths.fetch_add(1, Ordering::Relaxed);
+                                    path_profitable = true;
+                                }
+                                let mut report = format!(
+                                    "--- Opportunity (Size: {} ETH) ---\n",
+                                    format_ether(size)
+                                );
+                                for (idx, (inp, outp, p_name)) in step_results.iter().enumerate() {
+                                    report.push_str(&format!(
+                                        "  Step {}: {} -> {} via {}\n",
+                                        idx + 1,
+                                        format_ether(*inp),
+                                        format_ether(*outp),
+                                        p_name
+                                    ));
+                                }
+                                report
+                                    .push_str(&format!("  Gross: {} | Net: {} WEI\n", gross, net));
+
+                                info!("{}", report);
+                                append_log_to_file(&report);
+                            }
+                        }
+                    }
                 }
-                Some((path, amt))
             })
-            .buffer_unordered(20)
-            .collect::<Vec<_>>()
             .await;
 
-        let ok_paths = results.iter().flatten().count();
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
-
-        // info!(
-        //     "--- Block {} | Gas: {} gwei | Cands: {} -> OkPaths: {} ---",
-        //     current_bn, gas_gwei, total_candidates, ok_paths
-        // );
-
-        for (path, out_eth) in results.into_iter().flatten() {
-            let gross_profit = if out_eth > borrow_amount {
-                I256::from((out_eth - borrow_amount).as_u128())
-            } else {
-                -I256::from((borrow_amount - out_eth).as_u128())
-            };
-
-            let gas_cost = if path.is_triangle {
-                gas_cost_3hop
-            } else {
-                gas_cost_2hop
-            };
-            let net_profit = gross_profit - I256::from(gas_cost);
-
-            let route_name = if path.is_triangle {
-                format!(
-                    "{}->{}->{}",
-                    path.pools[0].name, path.pools[1].name, path.pools[2].name
-                )
-            } else {
-                format!("{}->{}", path.pools[0].name, path.pools[1].name)
-            };
-
-            // Build log message
-            let log_msg = if net_profit > I256::from(0) {
-                format!(
-                    "💰 NET PROFIT: {} | Gross: {} | Net: {} WEI",
-                    route_name, gross_profit, net_profit
-                )
-            } else if gross_profit > I256::from(-50000000000000i64) {
-                // format!(
-                //     "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
-                //     route_name, gross_profit, net_profit, gas_cost
-                // )
-                String::new()
-            } else {
-                String::new()
-            };
-
-            if !log_msg.is_empty() {
-                info!("{}", log_msg);
-                append_log_to_file(&log_msg); // 🔥 写入本地文件
-            }
-        }
-        // info!("-----------------------");
+        let ok_paths_count = ok_paths.load(Ordering::Relaxed);
+        info!(
+            "--- Block {} | Gas: {} gwei | Cands: {} -> OkPaths: {} ---",
+            current_bn, gas_gwei, total_candidates, ok_paths_count
+        );
     }
+
     Ok(())
 }
 
