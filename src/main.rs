@@ -164,6 +164,10 @@ async fn get_amount_out(
             .map_err(|e| anyhow!("V2 t0: {}", e))?;
 
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
+        info!(
+            "V2 Debug: Pool: {}, TokenIn: {}, R_In: {}, R_Out: {}",
+            pool.name, token_in, reserve_in, reserve_out
+        );
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
