@@ -52,15 +52,13 @@ struct PoolConfig {
 
 // --- ABI Definitions ---
 abigen!(
-    // Uniswap V3 Quoter
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome CL MixedRouteQuoterV1 (Correct Interface)
-    // 注意：它的 quoteExactInputSingleV2 需要一个特定的结构体
+    // Aerodrome CL MixedRouteQuoterV1
     IMixedRouteQuoterV1,
     r#"[
         struct QuoteExactInputSingleV2Params { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
@@ -125,7 +123,7 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 Logic ---
+        // V2
         let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
@@ -142,20 +140,17 @@ async fn get_amount_out(
             .call()
             .await
             .map_err(|e| anyhow!("V2 t0: {}", e))?;
-
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
-
         let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // --- CL Logic (Aerodrome MixedRouteQuoter) ---
-        // 使用 quoteExactInputSingleV2
+        // CL (Aerodrome)
         let quoter = IMixedRouteQuoterV1::new(pool.quoter, client);
         let params = QuoteExactInputSingleV2Params {
             token_in,
@@ -164,17 +159,11 @@ async fn get_amount_out(
             fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
-
-        // 如果这里报错，说明 Aerodrome Quoter 地址或 ABI 还是不对，但至少不会是 Uniswap 的价格
-        let (amount_out, _, _, _) = quoter
-            .quote_exact_input_single_v2(params)
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL Quoter Fail: {}", e))?;
-
+        // 这里的报错会被外层捕获并打印
+        let (amount_out, _, _, _) = quoter.quote_exact_input_single_v2(params).call().await?;
         Ok(amount_out)
     } else {
-        // --- V3 Logic (Uniswap QuoterV2) ---
+        // V3 (Uniswap)
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -200,7 +189,7 @@ struct ArbPath {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.1 (Safety Check & Triangles)");
+    info!("🚀 System Starting: Base Bot V5.2 (Deep Debug & Triangles)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -214,11 +203,12 @@ async fn main() -> Result<()> {
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
+    let mut cl_pool_sample: Option<PoolConfig> = None;
+
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
         let quoter_addr = Address::from_str(&cfg.quoter)?;
-
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
             1
@@ -228,23 +218,55 @@ async fn main() -> Result<()> {
             0
         };
 
-        // 🔥 关键自检：防止 Aerodrome CL 使用 Uniswap Quoter
         if proto_code == 2 && quoter_addr == uniswap_quoter_addr {
-            error!("❌ CRITICAL CONFIG ERROR: Pool '{}' is declared as CL but uses Uniswap Quoter address!", cfg.name);
-            panic!("Please fix pools.json: Aerodrome CL pools must use Aerodrome's Quoter (0x254cf9...).");
+            error!(
+                "❌ CRITICAL: Pool '{}' uses Uniswap Quoter but is marked as CL!",
+                cfg.name
+            );
+            panic!("Config error");
         }
 
-        pools.push(PoolConfig {
-            name: cfg.name,
+        let p_config = PoolConfig {
+            name: cfg.name.clone(),
             router: Address::from_str(&cfg.router)?,
             quoter: quoter_addr,
             fee: cfg.fee,
             token_a,
             token_b,
             protocol: proto_code,
-        });
+        };
+        pools.push(p_config.clone());
+
+        if proto_code == 2 && cl_pool_sample.is_none() {
+            cl_pool_sample = Some(p_config);
+        }
     }
-    info!("✅ Loaded {} Pools. Safety checks passed.", pools.len());
+    info!("✅ Loaded {} Pools.", pools.len());
+
+    // --- 🕵️‍♂️ Pre-flight Check: Test CL Quoter ---
+    if let Some(cl_pool) = cl_pool_sample {
+        info!(
+            "🕵️‍♂️ Performing Pre-flight Check on CL Pool: {}",
+            cl_pool.name
+        );
+        let test_amount = parse_ether("0.001").unwrap();
+        // Try WETH -> Token or Token -> WETH
+        let (t_in, t_out) = if cl_pool.token_a == weth {
+            (cl_pool.token_a, cl_pool.token_b)
+        } else {
+            (cl_pool.token_b, cl_pool.token_a)
+        };
+
+        match get_amount_out(client.clone(), &cl_pool, t_in, t_out, test_amount).await {
+            Ok(amt) => info!("✅ CL Quoter Verification PASSED. Output: {} Wei", amt),
+            Err(e) => {
+                error!("❌ CL Quoter Verification FAILED: {:?}", e);
+                info!("⚠️ System will start, but CL paths may fail.");
+            }
+        }
+    } else {
+        info!("⚠️ No CL pools found to verify.");
+    }
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
@@ -267,16 +289,13 @@ async fn main() -> Result<()> {
         let borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
-
         let gas_price = provider
             .get_gas_price()
             .await
             .unwrap_or(parse_ether("0.0000000001").unwrap());
-        // Gas estimate (simplified)
         let gas_cost_2hop = (gas_price * U256::from(300_000)).as_u128();
         let gas_cost_3hop = (gas_price * U256::from(450_000)).as_u128();
 
-        // Build Candidates
         let mut candidates = Vec::new();
 
         // 2-Hop
@@ -310,7 +329,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 3-Hop (Triangular)
+        // 3-Hop (Triangular) - 修正版
         for i in 0..pools.len() {
             let pa = &pools[i];
             if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
@@ -327,6 +346,14 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let pb = &pools[j];
+
+                // 关键修正：第二跳 pb 绝对不能包含 WETH，否则就是 2-hop 退化
+                let pb_has_weth = pb.token_a == weth_addr_parsed || pb.token_b == weth_addr_parsed;
+                if pb_has_weth {
+                    continue;
+                }
+
+                // pb 必须连接 token_1
                 if pb.token_a != token_1 && pb.token_b != token_1 {
                     continue;
                 }
@@ -335,18 +362,17 @@ async fn main() -> Result<()> {
                 } else {
                     pb.token_a
                 };
-                if token_2 == weth_addr_parsed {
-                    continue;
-                }
 
                 for k in 0..pools.len() {
                     if k == i || k == j {
                         continue;
                     }
                     let pc = &pools[k];
+                    // pc 必须连接 token_2 和 WETH
                     let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
                     let pc_has_weth =
                         pc.token_a == weth_addr_parsed || pc.token_b == weth_addr_parsed;
+
                     if pc_has_token2 && pc_has_weth {
                         candidates.push(ArbPath {
                             pools: vec![pa.clone(), pb.clone(), pc.clone()],
@@ -358,6 +384,7 @@ async fn main() -> Result<()> {
             }
         }
 
+        let total_candidates = candidates.len();
         let results = stream::iter(candidates)
             .map(|path| async move {
                 let mut amt = borrow_amount;
@@ -372,7 +399,11 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None,
+                    Err(e) => {
+                        // 打印前几条错误，避免刷屏
+                        warn!("❌ S1 Fail [{}]: {:?}", path.pools[0].name, e);
+                        return None;
+                    }
                 };
                 // Step 2
                 amt = match get_amount_out(
@@ -385,7 +416,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None,
+                    Err(e) => {
+                        warn!("❌ S2 Fail [{}]: {:?}", path.pools[1].name, e);
+                        return None;
+                    }
                 };
                 // Step 3
                 if path.is_triangle {
@@ -399,7 +433,10 @@ async fn main() -> Result<()> {
                     .await
                     {
                         Ok(a) => a,
-                        Err(_) => return None,
+                        Err(e) => {
+                            warn!("❌ S3 Fail [{}]: {:?}", path.pools[2].name, e);
+                            return None;
+                        }
                     };
                 }
                 Some((path, amt))
@@ -410,9 +447,10 @@ async fn main() -> Result<()> {
 
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
         info!(
-            "--- Block {} | Gas: {} gwei | Paths Scanned: {} ---",
+            "--- Block {} | Gas: {} gwei | Cands: {} -> Paths: {} ---",
             current_bn,
             gas_gwei,
+            total_candidates,
             results.len()
         );
 
@@ -445,10 +483,10 @@ async fn main() -> Result<()> {
                     route_name, gross_profit, net_profit
                 );
             } else {
-                // Filter spam
-                if gross_profit > I256::from(-1000000000000000i64) {
+                // Filter massive losses
+                if gross_profit > I256::from(-50000000000000i64) {
                     info!(
-                        "🧊 WATCH: {} | Gross: {} | Net: {} (GasCost: {})",
+                        "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
                         route_name, gross_profit, net_profit, gas_cost
                     );
                 }
