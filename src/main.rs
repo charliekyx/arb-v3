@@ -64,6 +64,34 @@ struct PoolConfig {
     protocol: u8, // 0=V3, 1=V2, 2=CL
 }
 
+// --- Logging Structs ---
+#[derive(Serialize, Debug, Clone)]
+struct StepLog {
+    pool: String,
+    token_in: String,
+    token_out: String,
+    amount_in: String,
+    amount_out: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
+struct OpportunityLog {
+    block: u64,
+    ts: u64,
+    path: Vec<String>,
+    tokens: Vec<String>,
+    size_raw: String,
+    out_raw: String,
+    gross_raw: String,
+    net_raw: String,
+    gross_bps: i128,
+    net_bps: i128,
+    gas_price_wei: String,
+    gas_used_assumed: u64,
+    gas_cost_priced_raw: String,
+    can_price_gas: bool,
+    steps: Vec<StepLog>,
+}
 // --- ABI Definitions ---
 abigen!(
     IQuoterV2,
@@ -161,6 +189,17 @@ impl SharedGasManager {
     }
 }
 
+fn append_jsonl_log(log_entry: &OpportunityLog) -> Result<()> {
+    let file_path = "trades.jsonl";
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let json_string = serde_json::to_string(log_entry)?;
+    writeln!(file, "{}", json_string)?;
+    Ok(())
+}
+
 // 恢复：追加日志到本地文件
 fn append_log_to_file(msg: &str) {
     let file_path = "opportunities.txt";
@@ -184,6 +223,31 @@ fn format_token_amount(amount: U256, token: Address) -> String {
     } else {
         format_ether(amount)
     }
+}
+
+fn token_symbol(token: Address) -> String {
+    let weth = Address::from_str(WETH_ADDR).unwrap();
+    let usdc = Address::from_str(USDC_ADDR).unwrap();
+    let usdbc = Address::from_str(USDBC_ADDR).unwrap();
+    let aero = Address::from_str(AERO_ADDR).unwrap();
+    let cbeth = Address::from_str(CBETH_ADDR).unwrap();
+    let ezeth = Address::from_str(EZETH_ADDR).unwrap();
+
+    if token == weth {
+        "WETH".to_string()
+    } else if token == usdc {
+        "USDC".to_string()
+    } else if token == usdbc {
+        "USDbC".to_string()
+    } else if token == aero {
+        "AERO".to_string()
+    } else if token == cbeth {
+        "cbETH".to_string()
+    } else if token == ezeth {
+        "ezETH".to_string()
+    } else {
+        format!("{:?}", token)
+    } // Fallback to address
 }
 
 fn decimals(token: Address) -> u32 {
@@ -798,6 +862,7 @@ async fn main() -> Result<()> {
         };
         let current_bn = block.number.unwrap();
         let block_number = current_bn.as_u64();
+        let block_timestamp = block.timestamp.as_u64();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("💀 Daily Gas Limit Reached.");
@@ -1081,6 +1146,52 @@ async fn main() -> Result<()> {
 
                             let net = gross - gas_cost;
 
+                            // --- Structured JSONL Logging ---
+                            let gross_bps: i128 = if size.as_u128() > 0 {
+                                (gross.as_i128() * 10_000i128) / (size.as_u128() as i128)
+                            } else {
+                                0
+                            };
+                            let net_bps: i128 = if size.as_u128() > 0 {
+                                (net.as_i128() * 10_000i128) / (size.as_u128() as i128)
+                            } else {
+                                0
+                            };
+
+                            let log_steps: Vec<StepLog> = step_results
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (inp, outp, p_name))| StepLog {
+                                    pool: p_name.clone(),
+                                    token_in: token_symbol(path.tokens[i]),
+                                    token_out: token_symbol(path.tokens[i + 1]),
+                                    amount_in: inp.to_string(),
+                                    amount_out: outp.to_string(),
+                                })
+                                .collect();
+
+                            let log_entry = OpportunityLog {
+                                block: block_number,
+                                ts: block_timestamp,
+                                path: path.pools.iter().map(|p| p.name.clone()).collect(),
+                                tokens: path.tokens.iter().map(|&t| token_symbol(t)).collect(),
+                                size_raw: size.to_string(),
+                                out_raw: current_amt.to_string(),
+                                gross_raw: gross.to_string(),
+                                net_raw: net.to_string(),
+                                gross_bps,
+                                net_bps,
+                                gas_price_wei: gas_price.to_string(),
+                                gas_used_assumed: gas_used,
+                                gas_cost_priced_raw: gas_cost.to_string(),
+                                can_price_gas,
+                                steps: log_steps,
+                            };
+
+                            if let Err(e) = append_jsonl_log(&log_entry) {
+                                error!("Failed to write to trades.jsonl: {:?}", e);
+                            }
+
                             found_any = true;
                             if gross > best_gross { // Note: We are tracking the best *gross* profit size
                                 best_gross = gross;
@@ -1117,6 +1228,16 @@ async fn main() -> Result<()> {
                                 }
                                 report
                                     .push_str(&format!("  Gross: {} | Net: {} WEI\n", gross, net));
+                                report.push_str(&format!(
+                                    "  Metadata: Block: {} | Token: {:?} (Dec: {}) | GasMode: {} | GasCostRaw: {} | GrossBps: {} | NetBps: {}\n",
+                                    block_number,
+                                    start_token,
+                                    decimals(start_token),
+                                    if can_price_gas { "exact" } else { "none" },
+                                    gas_cost,
+                                    gross_bps,
+                                    net_bps
+                                ));
 
                                 info!("{}", report);
                                 append_log_to_file(&report);
