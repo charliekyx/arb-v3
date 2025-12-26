@@ -62,8 +62,8 @@ abigen!(
 
     IMixedRouteQuoterV1,
     r#"[
-        struct QuoteExactInputSingleV2Params { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
-        function quoteExactInputSingleV2(QuoteExactInputSingleV2Params params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+        struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
+        function quoteExactInputSingleV2(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
     ICLPool,
@@ -72,11 +72,14 @@ abigen!(
         function token0() external view returns (address)
     ]"#;
 
+    // 🔥 V5.6: 真正的 Aerodrome V2 Pair 接口
     IAerodromePair,
     r#"[
-        function reserve0() external view returns (uint256)
-        function reserve1() external view returns (uint256)
+        function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast)
         function token0() external view returns (address)
+        function token1() external view returns (address)
+        function stable() external view returns (bool)
+        function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256 amountOut)
     ]"#
 );
 
@@ -141,20 +144,18 @@ fn calculate_v3_amount_out(
     }
 }
 
-// 🛡️ 启动校验逻辑：验证 CL Pool 是否真实有效
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
 ) -> bool {
     if let Some(pool_addr) = pool.pool {
         let contract = ICLPool::new(pool_addr, client);
-        // 尝试调用 slot0，如果 revert 则说明地址错误或不是 CL 池
         match contract.slot_0().call().await {
             Ok(_) => true,
             Err(_) => false,
         }
     } else {
-        false // 没有配置 pool 地址，直接无效
+        false
     }
 }
 
@@ -167,38 +168,51 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // V2
+        // --- V2 Logic (Aerodrome V2) ---
         let pair_addr = pool.quoter.ok_or(anyhow!("V2 missing pair address"))?;
         let pair = IAerodromePair::new(pair_addr, client.clone());
-        let r0 = pair
-            .reserve_0()
+
+        // 1. 优先尝试：直接问合约 (最准，支持 Stable/Volatile)
+        if let Ok(out) = pair.get_amount_out(amount_in, token_in).call().await {
+            return Ok(out);
+        }
+
+        // 2. 降级尝试：本地计算
+        // ⚠️ 必须先检查是不是 Stable 池。我们还没实现 Stable 曲线公式。
+        let is_stable = pair.stable().call().await.unwrap_or(false);
+        if is_stable {
+            return Err(anyhow!(
+                "Stable V2 pool local calc not supported, and on-chain quote failed"
+            ));
+        }
+
+        // 如果是 Volatile，才用 x*y=k
+        let (r0, r1, _) = pair
+            .get_reserves()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 r0: {}", e))?;
-        let r1 = pair
-            .reserve_1()
-            .call()
-            .await
-            .map_err(|e| anyhow!("V2 r1: {}", e))?;
+            .map_err(|e| anyhow!("V2 getReserves: {}", e))?;
         let t0 = pair
             .token_0()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 t0: {}", e))?;
+            .map_err(|e| anyhow!("V2 token0: {}", e))?;
+
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
+
         let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // CL Logic (Smart Fallback)
+        // CL Logic
         if let Some(quoter_addr) = pool.quoter {
             let quoter = IMixedRouteQuoterV1::new(quoter_addr, client.clone());
-            let params = QuoteExactInputSingleV2Params {
+            let params = i_mixed_route_quoter_v1::QuoteParams {
                 token_in,
                 token_out,
                 amount_in,
@@ -211,7 +225,6 @@ async fn get_amount_out(
                 return Ok(amount_out);
             }
         }
-        // Fallback to Slot0
         let pool_addr = pool.pool.ok_or(anyhow!("CL missing pool address"))?;
         let pool_contract = ICLPool::new(pool_addr, client.clone());
         let (sqrt_price, _, _, _, _, _) = pool_contract
@@ -232,7 +245,7 @@ async fn get_amount_out(
         // V3
         let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
         let quoter = IQuoterV2::new(quoter_addr, client);
-        let params = QuoteParams {
+        let params = i_quoter_v2::QuoteParams {
             token_in,
             token_out,
             amount_in,
@@ -256,7 +269,7 @@ struct ArbPath {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.5 (Auto-Validate & Strict Stats)");
+    info!("🚀 System Starting: Base Bot V5.6 (V2 Truth & Stable-Check)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -266,12 +279,11 @@ async fn main() -> Result<()> {
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
-    let weth = Address::from_str(WETH_ADDR)?;
+    let _weth = Address::from_str(WETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
 
-    // --- 1. Load & Validate Pools ---
     info!("🔍 Validating pools before startup...");
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
@@ -304,20 +316,19 @@ async fn main() -> Result<()> {
             protocol: proto_code,
         };
 
-        // 🔥 Auto-Validation for CL Pools
         if proto_code == 2 {
             if !validate_cl_pool(client.clone(), &p_config).await {
                 warn!(
-                    "❌ Removing invalid CL pool [{}]: Slot0 call failed (Bad Address).",
+                    "❌ Removing invalid CL pool [{}]: Slot0 call failed.",
                     cfg.name
                 );
-                continue; // Skip this pool
+                continue;
             }
         }
 
         pools.push(p_config);
     }
-    info!("✅ Active Pools: {} (Invalid pools removed)", pools.len());
+    info!("✅ Active Pools: {}", pools.len());
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
@@ -462,7 +473,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None, // S2 fail is common, hush logging
+                    Err(_) => return None,
                 };
                 // Step 3
                 if path.is_triangle {
@@ -485,7 +496,7 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>()
             .await;
 
-        let ok_paths = results.iter().flatten().count(); // 🔥 真实有效路径统计
+        let ok_paths = results.iter().flatten().count();
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
 
         info!(
@@ -522,7 +533,6 @@ async fn main() -> Result<()> {
                     route_name, gross_profit, net_profit
                 );
             } else {
-                // Filter massive losses
                 if gross_profit > I256::from(-50000000000000i64) {
                     info!(
                         "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
