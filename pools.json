@@ -178,17 +178,8 @@
         "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x98160B80081c7e92B2163b21F9856A9933D72B8B",
+        "quoter": "0x47cA96Ea59C13F72745928887f84C9F52C3D7348",
         "fee": 100,
-        "protocol": "v2"
-    },
-    {
-        "name": "Aerodrome_ezETH_WETH_V2",
-        "token_a": "0x2416092f14339098a3e39485637adBe91430b63b",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x5Be7c2d966779430c69992BfA149959560416956",
-        "fee": 500,
         "protocol": "v2"
     }
 ]
