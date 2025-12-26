@@ -527,10 +527,10 @@ async fn main() -> Result<()> {
         let ok_paths = results.iter().flatten().count();
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
 
-        info!(
-            "--- Block {} | Gas: {} gwei | Cands: {} -> OkPaths: {} ---",
-            current_bn, gas_gwei, total_candidates, ok_paths
-        );
+        // info!(
+        //     "--- Block {} | Gas: {} gwei | Cands: {} -> OkPaths: {} ---",
+        //     current_bn, gas_gwei, total_candidates, ok_paths
+        // );
 
         for (path, out_eth) in results.into_iter().flatten() {
             let gross_profit = if out_eth > borrow_amount {
