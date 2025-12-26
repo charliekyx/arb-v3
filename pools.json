@@ -9,10 +9,10 @@
         "protocol": "v2"
     },
     {
-        "name": "Uniswap_BRETT_0.3%",
-        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "name": "Uniswap_DEGEN_0.3%",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336e57b271c5c0b26f421741e481",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
         "protocol": "v3"
