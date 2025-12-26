@@ -6,7 +6,7 @@
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x82321f3BEB69f503380D6B233857d5C43562e2D0",
         "fee": 3000,
-        "protocol": "v2"
+        "protocol": "cl"
     },
     {
         "name": "Uniswap_AERO_0.3%",
