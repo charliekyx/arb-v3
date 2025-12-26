@@ -10,7 +10,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::Write,
     str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
@@ -72,7 +73,6 @@ abigen!(
         function token0() external view returns (address)
     ]"#;
 
-    // 🔥 V5.6: 真正的 Aerodrome V2 Pair 接口
     IAerodromePair,
     r#"[
         function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast)
@@ -95,6 +95,7 @@ struct GasState {
 }
 
 struct SharedGasManager {
+    file_path: String,
     accumulated_loss: Mutex<u128>,
 }
 
@@ -102,12 +103,14 @@ impl SharedGasManager {
     fn new(path: String) -> Self {
         let loaded = Self::load_gas_state(&path);
         Self {
+            file_path: path,
             accumulated_loss: Mutex::new(loaded.accumulated_loss),
         }
     }
+
     fn load_gas_state(path: &str) -> GasState {
         let today = Local::now().format("%Y-%m-%d").to_string();
-        if let Ok(c) = fs::read_to_string(path) {
+        if let Ok(c) = std::fs::read_to_string(path) {
             if let Ok(s) = serde_json::from_str::<GasState>(&c) {
                 if s.date == today {
                     return s;
@@ -119,8 +122,33 @@ impl SharedGasManager {
             accumulated_loss: 0,
         }
     }
+
     fn get_loss(&self) -> u128 {
         *self.accumulated_loss.lock().unwrap()
+    }
+
+    // 恢复：写入 Gas 状态到文件
+    fn add_loss(&self, loss: u128) {
+        let mut lock = self.accumulated_loss.lock().unwrap();
+        *lock += loss;
+
+        let state = GasState {
+            date: Local::now().format("%Y-%m-%d").to_string(),
+            accumulated_loss: *lock,
+        };
+
+        if let Ok(json) = serde_json::to_string_pretty(&state) {
+            let _ = std::fs::write(&self.file_path, json);
+        }
+    }
+}
+
+// 恢复：追加日志到本地文件
+fn append_log_to_file(msg: &str) {
+    let file_path = "opportunities.log";
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) {
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", timestamp, msg);
     }
 }
 
@@ -159,7 +187,35 @@ async fn validate_cl_pool(
     }
 }
 
-// Core Quote Function
+async fn validate_v2_pool(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    pool: &PoolConfig,
+) -> bool {
+    if let Some(pair_addr) = pool.quoter {
+        let pair = IAerodromePair::new(pair_addr, client);
+        let t0 = match pair.token_0().call().await {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+        let t1 = match pair.token_1().call().await {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+        let config_match = (t0 == pool.token_a && t1 == pool.token_b)
+            || (t0 == pool.token_b && t1 == pool.token_a);
+        if !config_match {
+            warn!(
+                "⚠️ V2 Token Mismatch for {}: Config({:?}, {:?}) vs Chain({:?}, {:?})",
+                pool.name, pool.token_a, pool.token_b, t0, t1
+            );
+            return false;
+        }
+        pair.get_reserves().call().await.is_ok() && pair.stable().call().await.is_ok()
+    } else {
+        false
+    }
+}
+
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -168,48 +224,13 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 Logic (Aerodrome V2) ---
         let pair_addr = pool.quoter.ok_or(anyhow!("V2 missing pair address"))?;
         let pair = IAerodromePair::new(pair_addr, client.clone());
-
-        // 1. 优先尝试：直接问合约 (最准，支持 Stable/Volatile)
-        if let Ok(out) = pair.get_amount_out(amount_in, token_in).call().await {
-            return Ok(out);
+        match pair.get_amount_out(amount_in, token_in).call().await {
+            Ok(out) => Ok(out),
+            Err(e) => Err(anyhow!("V2 on-chain quote failed: {}", e)),
         }
-
-        // 2. 降级尝试：本地计算
-        // ⚠️ 必须先检查是不是 Stable 池。我们还没实现 Stable 曲线公式。
-        let is_stable = pair.stable().call().await.unwrap_or(false);
-        if is_stable {
-            return Err(anyhow!(
-                "Stable V2 pool local calc not supported, and on-chain quote failed"
-            ));
-        }
-
-        // 如果是 Volatile，才用 x*y=k
-        let (r0, r1, _) = pair
-            .get_reserves()
-            .call()
-            .await
-            .map_err(|e| anyhow!("V2 getReserves: {}", e))?;
-        let t0 = pair
-            .token_0()
-            .call()
-            .await
-            .map_err(|e| anyhow!("V2 token0: {}", e))?;
-
-        let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
-        if reserve_in.is_zero() || reserve_out.is_zero() {
-            return Err(anyhow!("Empty V2 reserves"));
-        }
-
-        let fee_bps = U256::from(pool.fee);
-        let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
-        let numerator = amount_in_with_fee * reserve_out;
-        let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
-        Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // CL Logic
         if let Some(quoter_addr) = pool.quoter {
             let quoter = IMixedRouteQuoterV1::new(quoter_addr, client.clone());
             let params = i_mixed_route_quoter_v1::QuoteParams {
@@ -242,7 +263,6 @@ async fn get_amount_out(
         let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
         Ok(out_after_fee)
     } else {
-        // V3
         let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
         let quoter = IQuoterV2::new(quoter_addr, client);
         let params = i_quoter_v2::QuoteParams {
@@ -264,12 +284,10 @@ struct ArbPath {
     is_triangle: bool,
 }
 
-// --- Main ---
-
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.6 (V2 Truth & Stable-Check)");
+    info!("🚀 System Starting: Base Bot V5.8 (File Logging Restored)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -279,7 +297,7 @@ async fn main() -> Result<()> {
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
-    let _weth = Address::from_str(WETH_ADDR)?;
+    let weth = Address::from_str(WETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
@@ -316,14 +334,18 @@ async fn main() -> Result<()> {
             protocol: proto_code,
         };
 
-        if proto_code == 2 {
-            if !validate_cl_pool(client.clone(), &p_config).await {
-                warn!(
-                    "❌ Removing invalid CL pool [{}]: Slot0 call failed.",
-                    cfg.name
-                );
-                continue;
-            }
+        let is_valid = match proto_code {
+            1 => validate_v2_pool(client.clone(), &p_config).await,
+            2 => validate_cl_pool(client.clone(), &p_config).await,
+            _ => true,
+        };
+
+        if !is_valid {
+            warn!(
+                "❌ Removing invalid pool [{}]: Validation failed.",
+                cfg.name
+            );
+            continue;
         }
 
         pools.push(p_config);
@@ -473,7 +495,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(_) => return None,
+                    Err(e) => {
+                        warn!("❌ S2 Fail [{}]: {:?}", path.pools[1].name, e);
+                        return None;
+                    }
                 };
                 // Step 3
                 if path.is_triangle {
@@ -487,7 +512,10 @@ async fn main() -> Result<()> {
                     .await
                     {
                         Ok(a) => a,
-                        Err(_) => return None,
+                        Err(e) => {
+                            warn!("❌ S3 Fail [{}]: {:?}", path.pools[2].name, e);
+                            return None;
+                        }
                     };
                 }
                 Some((path, amt))
@@ -527,18 +555,24 @@ async fn main() -> Result<()> {
                 format!("{}->{}", path.pools[0].name, path.pools[1].name)
             };
 
-            if net_profit > I256::from(0) {
-                info!(
+            // Build log message
+            let log_msg = if net_profit > I256::from(0) {
+                format!(
                     "💰 NET PROFIT: {} | Gross: {} | Net: {} WEI",
                     route_name, gross_profit, net_profit
-                );
+                )
+            } else if gross_profit > I256::from(-50000000000000i64) {
+                format!(
+                    "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
+                    route_name, gross_profit, net_profit, gas_cost
+                )
             } else {
-                if gross_profit > I256::from(-50000000000000i64) {
-                    info!(
-                        "🧊 WATCH: {} | Gross: {} | Net: {} (Gas: {})",
-                        route_name, gross_profit, net_profit, gas_cost
-                    );
-                }
+                String::new()
+            };
+
+            if !log_msg.is_empty() {
+                info!("{}", log_msg);
+                append_log_to_file(&log_msg); // 🔥 写入本地文件
             }
         }
         info!("-----------------------");
