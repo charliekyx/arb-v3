@@ -10,8 +10,7 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File, OpenOptions},
-    io::Write,
+    fs::{self, File},
     str::FromStr,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -176,7 +175,7 @@ async fn get_amount_out(
         // CL
         let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
         let (sqrt_price_x96, _, _, _, _, _, _) = cl_pool
-            .slot0()
+            .slot_0()
             .call()
             .await
             .map_err(|e| anyhow!("CL slot0: {}", e))?;
@@ -331,7 +330,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(e) => {
+                    Err(_) => {
                         // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
