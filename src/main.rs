@@ -326,26 +326,81 @@ async fn probe_quoter(
     Ok(())
 }
 
+async fn probe_quoter_tuple(
+    provider: &Provider<Ipc>,
+    quoter: Address,
+    token_in: Address,
+    token_out: Address,
+    amount_in: U256,
+    tick_spacing: i32,
+    fee_u24: u32,
+) -> Result<()> {
+    let candidates = vec![
+        (
+            "quoteExactInputSingle((address,address,uint256,uint24,uint160))",
+            vec![Token::Tuple(vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Uint(amount_in),
+                Token::Uint(U256::from(fee_u24)),
+                Token::Uint(U256::zero()),
+            ])],
+        ),
+        (
+            "quoteExactInputSingle((address,address,uint256,int24,uint160))",
+            vec![Token::Tuple(vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Uint(amount_in),
+                Token::Int(I256::from(tick_spacing).into_raw()),
+                Token::Uint(U256::zero()),
+            ])],
+        ),
+    ];
+    for (sig, args) in candidates {
+        let selector = sel4(sig);
+        let mut data = Vec::new();
+        data.extend_from_slice(&selector);
+        data.extend_from_slice(&encode(&args));
+        let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
+        match provider.call(&tx.into(), None).await {
+            Ok(ret) => info!(
+                "PROBE OK {} sel=0x{} ret_len={}",
+                sig,
+                hex::encode(selector),
+                ret.0.len()
+            ),
+            Err(e) => warn!(
+                "PROBE ERR {} sel=0x{} err={:?}",
+                sig,
+                hex::encode(selector),
+                e
+            ),
+        }
+    }
+    Ok(())
+}
+
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
-) -> bool {
+) -> Option<(i32, u32)> {
     let Some(pool_addr) = pool.pool else {
-        return false;
+        return None;
     };
 
     // 1) 先确认地址上有没有代码
     match client.provider().get_code(pool_addr, None).await {
         Ok(code) if code.0.is_empty() => {
             warn!("❌ CL Pool {} has no code @ {:?}", pool.name, pool_addr);
-            return false;
+            return None;
         }
         Err(e) => {
             warn!(
                 "❌ CL Pool {} getCode failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
-            return false;
+            return None;
         }
         _ => {}
     }
@@ -362,7 +417,7 @@ async fn validate_cl_pool(
                 "❌ CL Pool {} tickSpacing() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
-            return false;
+            return None;
         }
     };
     let fee = match contract.fee().call().await {
@@ -372,7 +427,7 @@ async fn validate_cl_pool(
                 "❌ CL Pool {} fee() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
-            return false;
+            return None;
         }
     };
     let liq = match contract.liquidity().call().await {
@@ -382,7 +437,7 @@ async fn validate_cl_pool(
                 "❌ CL Pool {} liquidity() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
-            return false;
+            return None;
         }
     };
 
@@ -390,7 +445,7 @@ async fn validate_cl_pool(
         "✅ CL Pool {} ok | ts={} fee={} liq={}",
         pool.name, ts, fee, liq
     );
-    true
+    Some((ts, fee))
 }
 
 async fn validate_v2_pool(
@@ -555,10 +610,16 @@ async fn main() -> Result<()> {
             protocol: proto_code,
         };
 
-        let is_valid = match proto_code {
-            1 => validate_v2_pool(client.clone(), &p_config).await,
-            2 => validate_cl_pool(client.clone(), &p_config).await,
-            _ => true,
+        let (is_valid, real_ts, real_fee) = match proto_code {
+            1 => (validate_v2_pool(client.clone(), &p_config).await, 0, 0),
+            2 => {
+                if let Some((ts, fee)) = validate_cl_pool(client.clone(), &p_config).await {
+                    (true, ts, fee)
+                } else {
+                    (false, 0, 0)
+                }
+            }
+            _ => (true, 0, 0),
         };
 
         if !is_valid {
@@ -569,7 +630,13 @@ async fn main() -> Result<()> {
             continue;
         }
 
-        pools.push(p_config);
+        // Update config with real on-chain values for CL pools
+        let mut final_config = p_config;
+        if proto_code == 2 {
+            final_config.tick_spacing = real_ts;
+            final_config.pool_fee = real_fee;
+        }
+        pools.push(final_config);
 
         if proto_code == 2 {
             if let Some(q) = quoter_addr {
@@ -596,6 +663,17 @@ async fn main() -> Result<()> {
         parse_amount("100", usdc), // 100 USDC
         100,                       // tickSpacing
         500,                       // fee
+    )
+    .await?;
+
+    probe_quoter_tuple(
+        provider.as_ref(),
+        q,
+        usdc,
+        aero,
+        parse_amount("100", usdc),
+        100,
+        500,
     )
     .await?;
 
