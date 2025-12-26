@@ -219,9 +219,10 @@ async fn validate_cl_pool(
     // 2) 再测 slot0
     let contract = ICLPool::new(pool_addr, client.clone());
     // 只要 slot0 能返回数据，就说明它是活的
-    if contract.slot0().call().await.is_ok() {
+    if contract.slot_0().call().await.is_ok() {
         return true;
     }
+    false
 }
 
 async fn validate_v2_pool(
