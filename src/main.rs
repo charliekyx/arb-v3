@@ -10,8 +10,7 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File, OpenOptions},
-    io::Write,
+    fs::{self, File},
     str::FromStr,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -44,10 +43,10 @@ struct JsonPoolInput {
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address, // 注意：对于 Aerodrome V2，这里存 Pair 地址
+    quoter: Address, // 注意：对于 V2/CL，这里填 Pool 地址；对于 V3，这里填 Quoter 地址
     fee: u32,
     token_other: Address,
-    protocol: u8, // 0 = V3, 1 = V2 (Aerodrome)
+    protocol: u8, // 0 = V3 (Quoter), 1 = V2 (Pair), 2 = CL (Pool Slot0)
 }
 
 // --- ABI Definitions ---
@@ -64,19 +63,20 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // 通用 Uniswap V2 接口 (保留以备不时之需)
-    IUniswapV2Pair,
-    r#"[
-        function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
-        function token0() external view returns (address)
-    ]"#;
-
-    // [新增] Aerodrome V2 Pair 接口 (适配 Solidly/Velodrome 模式)
+    // Aerodrome V2 (Basic/Volatile)
     IAerodromePair,
     r#"[
         function reserve0() external view returns (uint256)
         function reserve1() external view returns (uint256)
         function token0() external view returns (address)
+    ]"#;
+
+    // [新增] Aerodrome CL (Slipstream) / Uniswap V3 Pool 接口
+    IAerodromeCLPool,
+    r#"[
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
+        function token0() external view returns (address)
+        function liquidity() external view returns (uint128)
     ]"#
 );
 
@@ -146,46 +146,85 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 逻辑 (Aerodrome Pair) ---
-        // 使用新定义的 IAerodromePair 接口
+        // --- V2 Logic (Aerodrome Basic) ---
         let pair = IAerodromePair::new(pool.quoter, client.clone());
-
-        // 1. 分别获取 reserve0 和 reserve1 (解决 getReserves 不存在的问题)
         let r0 = pair
             .reserve_0()
             .call()
             .await
-            .map_err(|e| anyhow!("Failed to get reserve0: {}", e))?;
+            .map_err(|e| anyhow!("V2 r0 fail: {}", e))?;
         let r1 = pair
             .reserve_1()
             .call()
             .await
-            .map_err(|e| anyhow!("Failed to get reserve1: {}", e))?;
-
-        // 2. 确认 token0 是哪个
+            .map_err(|e| anyhow!("V2 r1 fail: {}", e))?;
         let t0 = pair
             .token_0()
             .call()
             .await
-            .map_err(|e| anyhow!("Failed to get token0: {}", e))?;
+            .map_err(|e| anyhow!("V2 t0 fail: {}", e))?;
 
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
 
         if reserve_in.is_zero() || reserve_out.is_zero() {
-            return Err(anyhow!("Empty reserves"));
+            return Err(anyhow!("Empty V2 reserves"));
         }
 
-        // 3. 手动计算输出 (xy=k 公式)
-        // Aerodrome Volatile 费率通常是 0.3% (3000) 或用户配置的费率
-        // 费率基数 1,000,000。 fee 3000 = 0.3%
-        let fee_bps = U256::from(pool.fee);
+        let fee_bps = U256::from(pool.fee); // e.g. 3000
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
-
         Ok(numerator / denominator)
+    } else if pool.protocol == 2 {
+        // --- CL Logic (Aerodrome Slipstream / Uniswap V3) ---
+        // 直接读取 slot0 计算现货价格，避免调用 Quoter 导致 revert 或 消耗 gas
+        let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
+
+        // 1. 获取 slot_0 (包含 sqrtPriceX96)
+        let (sqrt_price_x96, _, _, _, _, _, _) = cl_pool
+            .slot_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL slot0 fail: {}", e))?;
+        let t0 = cl_pool
+            .token_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL t0 fail: {}", e))?;
+
+        // 2. 计算价格 (Price = sqrtPrice^2 / 2^192)
+        // 简单现货估算: AmountOut = AmountIn * Price
+        // 注意：这忽略了滑点(Impact)，但对于大池子的小额探测足够准确且极快
+
+        let q96 = U256::from(1) << 96;
+        let sqrt_price = U256::from(sqrt_price_x96);
+
+        let amount_out_raw = if token_in == t0 {
+            // Token0 -> Token1
+            // Out = In * (P / 2^96)^2
+            // Out = In * P * P / 2^192
+            let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
+            amount_in.checked_mul(p2).unwrap_or(U256::zero()) >> 192
+        } else {
+            // Token1 -> Token0
+            // Out = In / (P / 2^96)^2
+            // Out = In * 2^192 / P^2
+            let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
+            if p2.is_zero() {
+                U256::zero()
+            } else {
+                let num = amount_in << 192;
+                num.checked_div(p2).unwrap_or(U256::zero())
+            }
+        };
+
+        // 3. 扣除手续费 (近似)
+        let fee_bps = U256::from(pool.fee);
+        let amount_out = amount_out_raw * (U256::from(1000000) - fee_bps) / U256::from(1000000);
+
+        Ok(amount_out)
     } else {
-        // --- V3 逻辑 (Uniswap Quoter) ---
+        // --- V3 Quoter Logic (Default) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -204,10 +243,9 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot (Direct Pair Query)");
-    info!("🔥 模式: 绕过 Router，直接查询 Pair 储备量");
+    info!("🚀 System Starting: Base Bot V3.1 (Support V2/V3/CL)");
+    info!("🔥 模式: Direct Pool Query (V2 & CL) + Quoter (V3)");
 
-    // 1. Config
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
     let wallet = LocalWallet::from_str(&config.private_key)?.with_chain_id(8453u64);
@@ -218,7 +256,7 @@ async fn main() -> Result<()> {
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
 
-    // 2. Load Pools
+    // Load Pools
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
     let weth = Address::from_str(WETH_ADDR)?;
@@ -229,20 +267,20 @@ async fn main() -> Result<()> {
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
 
-        let proto_code = if let Some(p) = cfg.protocol {
-            if p.to_lowercase() == "v2" {
-                1
-            } else {
-                0
-            }
+        // 协议解析逻辑更新
+        let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
+        let proto_code = if proto_str == "v2" {
+            1 // Aerodrome V2 (Pair)
+        } else if proto_str == "cl" || proto_str == "slipstream" {
+            2 // Aerodrome CL (Pool Slot0)
         } else {
-            0
+            0 // Uniswap V3 (Quoter)
         };
 
         pools.push(PoolConfig {
             name: cfg.name,
             router: Address::from_str(&cfg.router)?,
-            quoter: Address::from_str(&cfg.quoter)?, // V2模式下这里必须是Pair地址
+            quoter: Address::from_str(&cfg.quoter)?,
             fee: cfg.fee,
             token_other,
             protocol: proto_code,
@@ -250,7 +288,7 @@ async fn main() -> Result<()> {
     }
     info!("✅ Loaded {} Pools.", pools.len());
 
-    // 3. Block Subscription
+    // Block Subscription
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
@@ -269,8 +307,6 @@ async fn main() -> Result<()> {
             break;
         }
 
-        // --- Concurrent Logic ---
-
         let mut candidates = Vec::new();
         for i in 0..pools.len() {
             for j in 0..pools.len() {
@@ -278,7 +314,6 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let (pa, pb) = (&pools[i], &pools[j]);
-                // 必须是同一种币
                 if pa.token_other != pb.token_other {
                     continue;
                 }
@@ -286,13 +321,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        let borrow_amount = parse_ether("0.1").unwrap();
+        // 这里建议将金额改小一点，避免在小池子造成巨大滑点
+        let borrow_amount = parse_ether("0.05").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
         let results = stream::iter(candidates)
             .map(|(pa, pb)| async move {
-                // Step A: WETH -> Token
+                // Step A
                 let out_token = match get_amount_out(
                     client_ref.clone(),
                     &pa,
@@ -303,13 +339,12 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(e) => {
-                        warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
+                    Err(_) => {
+                        // warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
-
-                // Step B: Token -> WETH
+                // Step B
                 let out_eth = match get_amount_out(
                     client_ref.clone(),
                     &pb,
@@ -320,47 +355,27 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_e) => {
-                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
-                        return None;
-                    }
+                    Err(_e) => return None,
                 };
-
                 Some((pa, pb, out_eth))
             })
             .buffer_unordered(30)
             .collect::<Vec<_>>()
             .await;
 
-        // 4. 处理结果
         info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
-                // 赚钱
                 let profit = out_eth - borrow_amount;
-                let profit_eth = format_ether(profit);
-                let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                let net_status = if profit > parse_ether("0.00015").unwrap() {
-                    "🔥[HIGH]"
-                } else {
-                    "❄️[LOW]"
-                };
-
                 let log_msg = format!(
-                    "[{}] {} -> {} | Profit: {} ETH ({})",
-                    timestamp, pa.name, pb.name, profit_eth, net_status
+                    "💰 PROFIT: {} -> {} | +{} ETH",
+                    pa.name,
+                    pb.name,
+                    format_ether(profit)
                 );
                 info!("{}", log_msg);
-
-                if let Ok(mut file) = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("opportunities.txt")
-                {
-                    let _ = writeln!(file, "{}", log_msg);
-                }
+                // 真实执行逻辑需在这里添加
             } else {
-                // 亏钱
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
