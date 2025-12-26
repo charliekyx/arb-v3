@@ -210,6 +210,106 @@ async fn debug_slot0_raw(provider: &Provider<Ipc>, pool: Address) -> Result<()> 
     Ok(())
 }
 
+fn sel4(sig: &str) -> [u8; 4] {
+    let h = keccak256(sig.as_bytes());
+    [h[0], h[1], h[2], h[3]]
+}
+
+async fn probe_quoter(
+    provider: &Provider<Ipc>,
+    quoter: Address,
+    token_in: Address,
+    token_out: Address,
+    amount_in: U256,
+    tick_spacing: i32,
+    fee_u24: u32,
+) -> Result<()> {
+    // 常见候选：fee / tickSpacing，不同顺序，有的没有 sqrtPriceLimitX96
+    let candidates = vec![
+        "quoteExactInputSingle(address,address,uint24,uint256,uint160)",
+        "quoteExactInputSingle(address,address,int24,uint256,uint160)",
+        "quoteExactInputSingle(address,address,uint256,uint24,uint160)",
+        "quoteExactInputSingle(address,address,uint256,int24,uint160)",
+        "quoteExactInputSingle(address,address,uint24,uint256)",
+        "quoteExactInputSingle(address,address,int24,uint256)",
+    ];
+    for sig in candidates {
+        let selector = sel4(sig);
+        // 逐个 signature 手工拼 args（注意：encode 的 Token 列表必须和 sig 参数个数一致）
+        let args: Vec<Token> = match sig {
+            "quoteExactInputSingle(address,address,uint24,uint256,uint160)" => vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Uint(U256::from(fee_u24)),
+                Token::Uint(amount_in),
+                Token::Uint(U256::zero()),
+            ],
+            "quoteExactInputSingle(address,address,int24,uint256,uint160)" => vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Int(I256::from(tick_spacing).into_raw()),
+                Token::Uint(amount_in),
+                Token::Uint(U256::zero()),
+            ],
+            "quoteExactInputSingle(address,address,uint256,uint24,uint160)" => vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Uint(amount_in),
+                Token::Uint(U256::from(fee_u24)),
+                Token::Uint(U256::zero()),
+            ],
+            "quoteExactInputSingle(address,address,uint256,int24,uint160)" => vec![
+                Token::Address(token_in),
+                Token::Address(token_out),
+                Token::Uint(amount_in),
+                Token::Int(I256::from(tick_spacing).into_raw()),
+                Token::Uint(U256::zero()),
+            ],
+            "quoteExactInputSingle(address,address,uint24,uint256)" => {
+                vec![
+                    Token::Address(token_in),
+                    Token::Address(token_out),
+                    Token::Uint(U256::from(fee_u24)),
+                    Token::Uint(amount_in),
+                ]
+            }
+            "quoteExactInputSingle(address,address,int24,uint256)" => {
+                vec![
+                    Token::Address(token_in),
+                    Token::Address(token_out),
+                    Token::Int(I256::from(tick_spacing).into_raw()),
+                    Token::Uint(amount_in),
+                ]
+            }
+            _ => unreachable!(),
+        };
+        let mut data = Vec::new();
+        data.extend_from_slice(&selector);
+        data.extend_from_slice(&encode(&args));
+        let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
+        match provider.call(&tx.into(), None).await {
+            Ok(ret) => {
+                info!(
+                    "PROBE OK {} sel=0x{} ret_len={}",
+                    sig,
+                    hex::encode(selector),
+                    ret.0.len()
+                );
+            }
+            Err(e) => {
+                // 这里把错误完整打出来（有时包含 revert data）
+                warn!(
+                    "PROBE ERR {} sel=0x{} err={:?}",
+                    sig,
+                    hex::encode(selector),
+                    e
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 use ethers::abi::{encode, Token};
 fn selector(sig: &str) -> [u8; 4] {
     let h = keccak256(sig.as_bytes());
@@ -221,7 +321,7 @@ async fn debug_quoter_raw(
     token_in: Address,
     token_out: Address,
     amount_in: U256,
-    tick_spacing: i32,
+    fee_u24: u32,
 ) -> Result<()> {
     // quoteExactInputSingle(address,address,int24,uint256,uint160)
     let sel = selector("quoteExactInputSingle(address,address,int24,uint256,uint160)");
@@ -229,7 +329,7 @@ async fn debug_quoter_raw(
     let tuple = Token::Tuple(vec![
         Token::Address(token_in),
         Token::Address(token_out),
-        Token::Int(I256::from(tick_spacing).into_raw()), // int24
+        Token::Uint(U256::from(fee_u24)), // uint24 放进 uint256 encode 没问题（ABI 会截断/读取低位）
         Token::Uint(amount_in),
         Token::Uint(U256::zero()), // sqrtPriceLimitX96
     ]);
@@ -372,16 +472,19 @@ async fn get_amount_out(
                 Ok(out) => return Ok(out),
                 Err(e) => {
                     warn!("❌ CL Quoter revert/decode fail {}: {:?}", pool.name, e);
-                    // Debug raw return
-                    let _ = debug_quoter_raw(
-                        client.provider(),
-                        pool.quoter.unwrap(),
-                        token_in,
-                        token_out,
-                        amount_in,
-                        pool.tick_spacing,
-                    )
-                    .await;
+                    if pool.name == "Aerodrome_AERO_USDC_CL_0.01" {
+                        // Debug raw return
+                        let _ = probe_quoter(
+                            client.provider(),
+                            pool.quoter.unwrap(),
+                            token_in,
+                            token_out,
+                            amount_in,
+                            pool.tick_spacing,
+                            pool.pool_fee,
+                        )
+                        .await;
+                    }
                 }
             }
         }
@@ -429,6 +532,7 @@ async fn main() -> Result<()> {
     let wallet = LocalWallet::from_str(&config.private_key)?.with_chain_id(8453u64);
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
+    let mut probed_quoters = std::collections::HashSet::new();
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
@@ -491,6 +595,15 @@ async fn main() -> Result<()> {
         }
 
         pools.push(p_config);
+
+        if proto_code == 2 {
+            if let Some(q) = quoter_addr {
+                if probed_quoters.insert(q) {
+                    let code = client.provider().get_code(q, None).await.unwrap();
+                    info!("CL quoter {} @ {:?} code_len={}", cfg.name, q, code.0.len());
+                }
+            }
+        }
     }
     info!("✅ Active Pools: {}", pools.len());
 
