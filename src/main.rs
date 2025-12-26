@@ -366,9 +366,7 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let _borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
-        let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
         let gas_price = provider
             .get_gas_price()
             .await
@@ -415,10 +413,10 @@ async fn main() -> Result<()> {
         // --- 3-Hop 路径生成器优化 ---
         for i in 0..pools.len() {
             let pa = &pools[i];
-            if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
+            if pa.token_a != weth && pa.token_b != weth {
                 continue;
             }
-            let token_1 = if pa.token_a == weth_addr_parsed {
+            let token_1 = if pa.token_a == weth {
                 pa.token_b
             } else {
                 pa.token_a
@@ -441,7 +439,7 @@ async fn main() -> Result<()> {
                 };
 
                 // 重点：只有当第 2 跳又回到了 WETH 时才跳过（因为那是 2-hop 的事）
-                if token_2 == weth_addr_parsed {
+                if token_2 == weth {
                     continue;
                 }
 
@@ -451,13 +449,12 @@ async fn main() -> Result<()> {
                     }
                     let pc = &pools[k];
                     let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                    let pc_has_weth =
-                        pc.token_a == weth_addr_parsed || pc.token_b == weth_addr_parsed;
+                    let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
 
                     if pc_has_token2 && pc_has_weth {
                         candidates.push(ArbPath {
                             pools: vec![pa.clone(), pb.clone(), pc.clone()],
-                            tokens: vec![weth_addr_parsed, token_1, token_2, weth_addr_parsed],
+                            tokens: vec![weth, token_1, token_2, weth],
                             is_triangle: true,
                         });
                     }
