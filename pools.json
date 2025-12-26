@@ -1,7 +1,34 @@
 [
     {
-        "name": "Aerodrome_DEGEN_Volatile_V2",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "name": "Uniswap_USDC_LowFee",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 500,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_USDC_Basic",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x2C4909355b0C036840819484c3A882A95659aBf3",
+        "fee": 0,
+        "protocol": "v2"
+    },
+    {
+        "name": "Uniswap_AERO_0.3%",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 3000,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_AERO_Volatile",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "quoter": "0x2C4909355b0C036840819484c3A882A95659aBf3",
@@ -9,8 +36,8 @@
         "protocol": "v2"
     },
     {
-        "name": "Uniswap_DEGEN_0.3%",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "name": "Uniswap_BRETT_0.3%_FIXED",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
@@ -25,32 +52,5 @@
         "quoter": "0x4e829F8A5213c42535AB84AA40BD4aDCCE9cBa02",
         "fee": 3000,
         "protocol": "cl"
-    },
-    {
-        "name": "Uniswap_BRETT_1%",
-        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000,
-        "protocol": "v3"
-    },
-    {
-        "name": "Aerodrome_TOSHI_CL",
-        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x74E4c08Bb50619b70550733D32b7e60424E9628e",
-        "fee": 3000,
-        "protocol": "cl"
-    },
-    {
-        "name": "Uniswap_TOSHI_1%",
-        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000,
-        "protocol": "v3"
     }
 ]
