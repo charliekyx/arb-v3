@@ -22,7 +22,7 @@
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x4e829F8A5213c42535AB84AA40BD4aDCCE9cBa02",
+        "quoter": "0x214356Cc4aAb907244A791CA9735292860490D5A",
         "fee": 3000,
         "protocol": "v2"
     },
@@ -40,7 +40,7 @@
         "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x74E4c08Bb50619b70550733D32b7e60424E9628e",
+        "quoter": "0x081E4455d91726212D1fa9AfFeE80637D1f7bE8E",
         "fee": 3000,
         "protocol": "v2"
     },
