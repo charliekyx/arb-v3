@@ -306,7 +306,8 @@ async fn main() -> Result<()> {
             }
         }
 
-        let borrow_amount = parse_ether("0.05").unwrap();
+        // let borrow_amount = parse_ether("0.05").unwrap();
+        let borrow_amount = parse_ether("0.001").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
 
@@ -340,7 +341,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(_e) => {
-                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
+                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, _e);
                         return None;
                     }
                 };
