@@ -196,20 +196,37 @@ async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
 ) -> bool {
-    if let Some(pool_addr) = pool.pool {
-        let contract = ICLPool::new(pool_addr, client);
-        match contract.slot_0().call().await {
-            Ok(_) => true,
-            Err(e) => {
-                warn!(
-                    "❌ CL Pool {} slot0() failed @ {:?}: {:?}",
-                    pool.name, pool_addr, e
-                );
-                false
-            }
+    let Some(pool_addr) = pool.pool else {
+        return false;
+    };
+
+    // 1) 先确认地址上有没有代码
+    match client.provider().get_code(pool_addr, None).await {
+        Ok(code) if code.0.is_empty() => {
+            warn!("❌ CL Pool {} has no code @ {:?}", pool.name, pool_addr);
+            return false;
         }
-    } else {
-        false
+        Err(e) => {
+            warn!(
+                "❌ CL Pool {} getCode failed @ {:?}: {:?}",
+                pool.name, pool_addr, e
+            );
+            return false;
+        }
+        _ => {}
+    }
+
+    // 2) 再测 slot0
+    let contract = ICLPool::new(pool_addr, client);
+    match contract.slot_0().call().await {
+        Ok(_) => true,
+        Err(e) => {
+            warn!(
+                "❌ CL Pool {} slot0() failed @ {:?}: {:?}",
+                pool.name, pool_addr, e
+            );
+            false
+        }
     }
 }
 
@@ -541,7 +558,13 @@ async fn main() -> Result<()> {
                                     ));
                                     current_amt = out;
                                 }
-                                Err(_) => {
+                                Err(e) => {
+                                    warn!(
+                                        "⚠️ Path failed at {} (Size: {}): {:?}",
+                                        path.pools[i].name,
+                                        format_ether(size),
+                                        e
+                                    );
                                     failed = true;
                                     break;
                                 }
