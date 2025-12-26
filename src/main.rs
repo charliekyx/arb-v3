@@ -410,7 +410,7 @@ async fn validate_cl_pool(
     }
 
     // 2) 调试 slot0 raw
-    let _ = debug_slot0_raw(client.provider(), pool_addr).await;
+    // let _ = debug_slot0_raw(client.provider(), pool_addr).await;
 
     // 3) 改用 tickSpacing/fee/liquidity 做验证
     let contract = ICLPool::new(pool_addr, client.clone());
@@ -635,6 +635,7 @@ async fn main() -> Result<()> {
 
     // --- Static Probe for CL Quoter ---
     // AERO/USDC CL: 100 USDC -> AERO
+    /*
     let usdc = Address::from_str(USDC_ADDR)?;
     let aero = Address::from_str("0x940181a94A35A4569E4529A3CDfB74e38FD98631")?;
     let q = Address::from_str("0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0")?;
@@ -660,6 +661,7 @@ async fn main() -> Result<()> {
         500,
     )
     .await?;
+    */
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
@@ -928,8 +930,13 @@ async fn main() -> Result<()> {
                     }
 
                     if found_any {
-                        // 仅当最佳档位的毛利 > -0.001 ETH 时才显示（过滤掉必死路径）
-                        if best_gross > I256::from(-1000000000000000i128) {
+                        // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
+                        let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
+                        let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
+                        let best_net = best_gross - gas_cost;
+
+                        // 仅当最佳档位的净利 > -0.0001 ETH 时才显示（接近盈利）
+                        if best_net > I256::from(-100_000_000_000_000i128) {
                             info!("{}", best_report);
                         }
                     }
