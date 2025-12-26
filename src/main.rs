@@ -1,10 +1,11 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use cocoon::Cocoon;
+use ethers::abi::{encode, Token};
 use ethers::{
     prelude::*,
-    types::{transaction::eip2718::TypedTransaction, Address, I256, U256},
-    utils::{format_ether, format_units, parse_ether},
+    types::{Address, I256, U256},
+    utils::{format_ether, format_units, parse_ether, parse_units},
 };
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -178,6 +179,21 @@ fn format_token_amount(amount: U256, token: Address) -> String {
     }
 }
 
+fn decimals(token: Address) -> u32 {
+    let usdc = Address::from_str(USDC_ADDR).unwrap();
+    let usdbc = Address::from_str(USDBC_ADDR).unwrap();
+    if token == usdc || token == usdbc {
+        6
+    } else {
+        18
+    }
+}
+
+fn parse_amount(s: &str, token: Address) -> U256 {
+    let d = decimals(token);
+    parse_units(s, d).expect("parse_units failed").into()
+}
+
 fn calculate_v3_amount_out(
     amount_in: U256,
     sqrt_price_x96: U256,
@@ -310,39 +326,6 @@ async fn probe_quoter(
     Ok(())
 }
 
-use ethers::abi::{encode, Token};
-fn selector(sig: &str) -> [u8; 4] {
-    let h = keccak256(sig.as_bytes());
-    [h[0], h[1], h[2], h[3]]
-}
-async fn debug_quoter_raw(
-    provider: &Provider<Ipc>,
-    quoter: Address,
-    token_in: Address,
-    token_out: Address,
-    amount_in: U256,
-    fee_u24: u32,
-) -> Result<()> {
-    // quoteExactInputSingle(address,address,int24,uint256,uint160)
-    let sel = selector("quoteExactInputSingle(address,address,int24,uint256,uint160)");
-    // ABI encode the tuple
-    let tuple = Token::Tuple(vec![
-        Token::Address(token_in),
-        Token::Address(token_out),
-        Token::Uint(U256::from(fee_u24)), // uint24 放进 uint256 encode 没问题（ABI 会截断/读取低位）
-        Token::Uint(amount_in),
-        Token::Uint(U256::zero()), // sqrtPriceLimitX96
-    ]);
-    let mut data = Vec::with_capacity(4 + 32 * 5);
-    data.extend_from_slice(&sel);
-    data.extend_from_slice(&encode(&[tuple]));
-    let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
-    let out: Bytes = provider.call(&tx.into(), None).await?;
-    info!("quoter raw len={} bytes", out.0.len());
-    info!("quoter raw=0x{}", hex::encode(&out.0));
-    Ok(())
-}
-
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -472,19 +455,11 @@ async fn get_amount_out(
                 Ok(out) => return Ok(out),
                 Err(e) => {
                     warn!("❌ CL Quoter revert/decode fail {}: {:?}", pool.name, e);
-                    if pool.name == "Aerodrome_AERO_USDC_CL_0.01" {
-                        // Debug raw return
-                        let _ = probe_quoter(
-                            client.provider(),
-                            pool.quoter.unwrap(),
-                            token_in,
-                            token_out,
-                            amount_in,
-                            pool.tick_spacing,
-                            pool.pool_fee,
-                        )
-                        .await;
-                    }
+                    warn!(
+                        "  -> Params: in={:?} out={:?} amt={} ts={} fee={}",
+                        token_in, token_out, amount_in, pool.tick_spacing, pool.pool_fee
+                    );
+                    // 移除这里的动态 probe，改为启动时静态 probe
                 }
             }
         }
@@ -607,16 +582,25 @@ async fn main() -> Result<()> {
     }
     info!("✅ Active Pools: {}", pools.len());
 
+    // --- Static Probe for CL Quoter ---
+    // AERO/USDC CL: 100 USDC -> AERO
+    let usdc = Address::from_str(USDC_ADDR)?;
+    let aero = Address::from_str("0x940181a94A35A4569E4529A3CDfB74e38FD98631")?;
+    let q = Address::from_str("0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0")?;
+    info!("🔍 Starting Static Probe for CL Quoter...");
+    probe_quoter(
+        provider.as_ref(),
+        q,
+        usdc,
+        aero,
+        parse_amount("100", usdc), // 100 USDC
+        100,                       // tickSpacing
+        500,                       // fee
+    )
+    .await?;
+
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
-
-    let test_sizes = [
-        parse_ether("0.1").unwrap(),
-        parse_ether("0.5").unwrap(),
-        parse_ether("1.0").unwrap(),
-        parse_ether("2.0").unwrap(),
-        parse_ether("5.0").unwrap(),
-    ];
 
     loop {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
@@ -749,6 +733,25 @@ async fn main() -> Result<()> {
                     let mut best_gross = I256::from(i64::MIN);
                     let mut best_report = String::new();
                     let mut found_any = false;
+
+                    let start_token = path.tokens[0];
+                    let test_sizes = if decimals(start_token) == 6 {
+                        vec![
+                            parse_amount("100", start_token),
+                            parse_amount("500", start_token),
+                            parse_amount("1000", start_token),
+                            parse_amount("2000", start_token),
+                            parse_amount("5000", start_token),
+                        ]
+                    } else {
+                        vec![
+                            parse_amount("0.1", start_token),
+                            parse_amount("0.5", start_token),
+                            parse_amount("1", start_token),
+                            parse_amount("2", start_token),
+                            parse_amount("5", start_token),
+                        ]
+                    };
 
                     // 🔥 局部改动：针对每条路径，跑遍所有资金档位
                     for size in test_sizes {
