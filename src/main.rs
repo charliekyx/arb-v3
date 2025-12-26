@@ -10,7 +10,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::Write,
     str::FromStr,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -43,10 +44,10 @@ struct JsonPoolInput {
 struct PoolConfig {
     name: String,
     router: Address,
-    quoter: Address, // 注意：对于 V2/CL，这里填 Pool 地址；对于 V3，这里填 Quoter 地址
+    quoter: Address,
     fee: u32,
     token_other: Address,
-    protocol: u8, // 0 = V3 (Quoter), 1 = V2 (Pair), 2 = CL (Pool Slot0)
+    protocol: u8, // 0=V3, 1=V2, 2=CL
 }
 
 // --- ABI Definitions ---
@@ -63,7 +64,6 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome V2 (Basic/Volatile)
     IAerodromePair,
     r#"[
         function reserve0() external view returns (uint256)
@@ -71,17 +71,16 @@ abigen!(
         function token0() external view returns (address)
     ]"#;
 
-    // [新增] Aerodrome CL (Slipstream) / Uniswap V3 Pool 接口
+    // Aerodrome CL / Uniswap V3 Pool
     IAerodromeCLPool,
     r#"[
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
         function token0() external view returns (address)
-        function liquidity() external view returns (uint128)
     ]"#
 );
 
 const WETH_ADDR: &str = "0x4200000000000000000000000000000000000006";
-const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000; // 0.02 ETH
+const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 
 // --- Helpers ---
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -146,69 +145,54 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // --- V2 Logic (Aerodrome Basic) ---
+        // V2
         let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 r0 fail: {}", e))?;
+            .map_err(|e| anyhow!("V2 r0: {}", e))?;
         let r1 = pair
             .reserve_1()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 r1 fail: {}", e))?;
+            .map_err(|e| anyhow!("V2 r1: {}", e))?;
         let t0 = pair
             .token_0()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 t0 fail: {}", e))?;
+            .map_err(|e| anyhow!("V2 t0: {}", e))?;
 
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
-
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
-
-        let fee_bps = U256::from(pool.fee); // e.g. 3000
+        let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // --- CL Logic (Aerodrome Slipstream / Uniswap V3) ---
-        // 直接读取 slot0 计算现货价格，避免调用 Quoter 导致 revert 或 消耗 gas
+        // CL
         let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
-
-        // 1. 获取 slot_0 (包含 sqrtPriceX96)
         let (sqrt_price_x96, _, _, _, _, _, _) = cl_pool
-            .slot_0()
+            .slot0()
             .call()
             .await
-            .map_err(|e| anyhow!("CL slot0 fail: {}", e))?;
+            .map_err(|e| anyhow!("CL slot0: {}", e))?;
         let t0 = cl_pool
             .token_0()
             .call()
             .await
-            .map_err(|e| anyhow!("CL t0 fail: {}", e))?;
+            .map_err(|e| anyhow!("CL t0: {}", e))?;
 
-        // 2. 计算价格 (Price = sqrtPrice^2 / 2^192)
-        // 简单现货估算: AmountOut = AmountIn * Price
-        // 注意：这忽略了滑点(Impact)，但对于大池子的小额探测足够准确且极快
-
-        let q96 = U256::from(1) << 96;
         let sqrt_price = U256::from(sqrt_price_x96);
-
         let amount_out_raw = if token_in == t0 {
-            // Token0 -> Token1
-            // Out = In * (P / 2^96)^2
-            // Out = In * P * P / 2^192
+            // 0 -> 1: price = (sqrtPrice / 2^96)^2
             let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
             amount_in.checked_mul(p2).unwrap_or(U256::zero()) >> 192
         } else {
-            // Token1 -> Token0
-            // Out = In / (P / 2^96)^2
-            // Out = In * 2^192 / P^2
+            // 1 -> 0: price = 1 / ((sqrtPrice / 2^96)^2)
             let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
             if p2.is_zero() {
                 U256::zero()
@@ -217,14 +201,12 @@ async fn get_amount_out(
                 num.checked_div(p2).unwrap_or(U256::zero())
             }
         };
-
-        // 3. 扣除手续费 (近似)
+        // 扣除手续费
         let fee_bps = U256::from(pool.fee);
         let amount_out = amount_out_raw * (U256::from(1000000) - fee_bps) / U256::from(1000000);
-
         Ok(amount_out)
     } else {
-        // --- V3 Quoter Logic (Default) ---
+        // V3 Quoter
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -238,23 +220,19 @@ async fn get_amount_out(
     }
 }
 
-// --- Main Entry ---
+// --- Main ---
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.1 (Support V2/V3/CL)");
+    info!("🚀 System Starting: Base Bot V3.2 (Debug Mode)");
     info!("🔥 模式: Direct Pool Query (V2 & CL) + Quoter (V3)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
     let wallet = LocalWallet::from_str(&config.private_key)?.with_chain_id(8453u64);
-    let my_addr = wallet.address();
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
-
-    let _contract_addr: Address = config.contract_address.parse()?;
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
-    let _nonce_manager = Arc::new(NonceManager::new(provider.clone(), my_addr).await?);
 
     // Load Pools
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
@@ -267,14 +245,13 @@ async fn main() -> Result<()> {
         let token_b = Address::from_str(&cfg.token_b)?;
         let token_other = if token_a == weth { token_b } else { token_a };
 
-        // 协议解析逻辑更新
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
         let proto_code = if proto_str == "v2" {
-            1 // Aerodrome V2 (Pair)
-        } else if proto_str == "cl" || proto_str == "slipstream" {
-            2 // Aerodrome CL (Pool Slot0)
+            1
+        } else if proto_str == "cl" {
+            2
         } else {
-            0 // Uniswap V3 (Quoter)
+            0
         };
 
         pools.push(PoolConfig {
@@ -288,7 +265,6 @@ async fn main() -> Result<()> {
     }
     info!("✅ Loaded {} Pools.", pools.len());
 
-    // Block Subscription
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
@@ -296,14 +272,14 @@ async fn main() -> Result<()> {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
             _ => {
-                warn!("Timeout/No Block");
+                warn!("Timeout");
                 continue;
             }
         };
         let current_bn = block.number.unwrap();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
-            error!("💀 Daily Gas Limit Reached. Stopping.");
+            error!("💀 Daily Gas Limit Reached.");
             break;
         }
 
@@ -321,7 +297,6 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 这里建议将金额改小一点，避免在小池子造成巨大滑点
         let borrow_amount = parse_ether("0.05").unwrap();
         let client_ref = &client;
         let weth_addr_parsed: Address = WETH_ADDR.parse().unwrap();
@@ -339,8 +314,9 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_) => {
-                        // warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
+                    Err(e) => {
+                        // 👉 这里我开启了报错日志，这样你就能看到为什么 BRETT/TOSHI 失败了
+                        warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
                 };
@@ -355,7 +331,10 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_e) => return None,
+                    Err(e) => {
+                        // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
+                        return None;
+                    }
                 };
                 Some((pa, pb, out_eth))
             })
@@ -367,14 +346,12 @@ async fn main() -> Result<()> {
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
                 let profit = out_eth - borrow_amount;
-                let log_msg = format!(
+                info!(
                     "💰 PROFIT: {} -> {} | +{} ETH",
                     pa.name,
                     pb.name,
                     format_ether(profit)
                 );
-                info!("{}", log_msg);
-                // 真实执行逻辑需在这里添加
             } else {
                 let loss = borrow_amount - out_eth;
                 info!(
