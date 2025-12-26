@@ -71,7 +71,8 @@ abigen!(
 
     IAerodromeCLQuoter,
     r#"[
-        function quoteExactInputSingle(address tokenIn, address tokenOut, int24 tickSpacing, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
+        struct CLQuoteParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }
+        function quoteExactInputSingle(CLQuoteParams params) external returns (uint256 amountOut, uint256 r1, uint256 r2, uint256 r3)
     ]"#;
 
     ICLPool,
@@ -364,12 +365,15 @@ async fn probe_quoter_tuple(
         data.extend_from_slice(&encode(&args));
         let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
         match provider.call(&tx.into(), None).await {
-            Ok(ret) => info!(
-                "PROBE OK {} sel=0x{} ret_len={}",
-                sig,
-                hex::encode(selector),
-                ret.0.len()
-            ),
+            Ok(ret) => {
+                info!(
+                    "PROBE OK {} sel=0x{} ret_len={}",
+                    sig,
+                    hex::encode(selector),
+                    ret.0.len()
+                );
+                info!("ret=0x{}", hex::encode(&ret.0));
+            }
             Err(e) => warn!(
                 "PROBE ERR {} sel=0x{} err={:?}",
                 sig,
@@ -493,43 +497,23 @@ async fn get_amount_out(
             .await
             .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
     } else if pool.protocol == 2 {
-        if let Some(q) = pool.quoter {
-            let quoter = IAerodromeCLQuoter::new(q, client.clone());
-            // ✅ 用 tickSpacing，而不是 pool_fee
-            match quoter
-                .quote_exact_input_single(
-                    token_in,
-                    token_out,
-                    pool.tick_spacing,
-                    amount_in,
-                    U256::zero(),
-                )
-                .call()
-                .await
-            {
-                Ok(out) => return Ok(out),
-                Err(e) => {
-                    warn!("❌ CL Quoter revert/decode fail {}: {:?}", pool.name, e);
-                    warn!(
-                        "  -> Params: in={:?} out={:?} amt={} ts={} fee={}",
-                        token_in, token_out, amount_in, pool.tick_spacing, pool.pool_fee
-                    );
-                    // 移除这里的动态 probe，改为启动时静态 probe
-                }
-            }
-        }
-
-        // 🔥 限制 Fallback 条件：仅当金额极小 (如 < 0.005 ETH) 且无 Quoter 时作为调试参考
-        if amount_in > parse_ether("0.005").unwrap() {
-            return Err(anyhow!("CL Quoter failed for large size: {}", pool.name));
-        }
-
-        // 原有的 slot0 fallback 仅用于小额“存活探测”
-        let pc = ICLPool::new(pool.pool.unwrap(), client);
-        let (sqrt, _, _, _, _, _) = pc.slot_0().call().await?;
-        let t0 = pc.token_0().call().await?;
-        let raw = calculate_v3_amount_out(amount_in, U256::from(sqrt), token_in, t0);
-        Ok(raw * (1000000 - pool.fee) / 1000000)
+        let q = pool
+            .quoter
+            .ok_or_else(|| anyhow!("CL missing quoter: {}", pool.name))?;
+        let quoter = IAerodromeCLQuoter::new(q, client.clone());
+        let params = i_aerodrome_cl_quoter::CLQuoteParams {
+            token_in,
+            token_out,
+            amount_in,
+            tick_spacing: pool.tick_spacing,
+            sqrt_price_limit_x96: U256::zero(),
+        };
+        let (amount_out, _r1, _r2, _r3) = quoter
+            .quote_exact_input_single(params)
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL Quoter call failed {}: {:?}", pool.name, e))?;
+        return Ok(amount_out);
     } else {
         let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
         let quoter = IQuoterV2::new(quoter_addr, client);
