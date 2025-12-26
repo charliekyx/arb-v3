@@ -4,17 +4,8 @@
         "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
+        "quoter": "0x82321f3BEB69f503380D6B233857d5C43562e2D0",
         "fee": 3000,
-        "protocol": "cl"
-    },
-    {
-        "name": "Aerodrome_AERO_USDC_CL",
-        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "fee": 100,
         "protocol": "cl"
     },
     {
@@ -36,12 +27,30 @@
         "protocol": "v3"
     },
     {
-        "name": "Uniswap_USDC_WETH_0.3%",
-        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "token_b": "0x4200000000000000000000000000000000000006",
+        "name": "Uniswap_AERO_USDC_0.3%",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_wstETH_CL",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
+        "fee": 100,
+        "protocol": "cl"
+    },
+    {
+        "name": "Uniswap_wstETH_0.01%",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 100,
         "protocol": "v3"
     }
 ]

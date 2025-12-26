@@ -34,7 +34,7 @@ struct JsonPoolInput {
     token_a: String,
     token_b: String,
     router: String,
-    quoter: String,
+    quoter: String, // V3=QuoterAddr, CL=PoolAddr
     fee: u32,
     protocol: Option<String>,
 }
@@ -58,11 +58,11 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    // Aerodrome CL MixedRouteQuoterV1
-    IMixedRouteQuoterV1,
+    // Slot0 for CL/V3 Local Calc
+    ICLPool,
     r#"[
-        struct QuoteExactInputSingleV2Params { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
-        function quoteExactInputSingleV2(QuoteExactInputSingleV2Params params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function token0() external view returns (address)
     ]"#;
 
     IAerodromePair,
@@ -75,7 +75,6 @@ abigen!(
 
 const WETH_ADDR: &str = "0x4200000000000000000000000000000000000006";
 const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
-const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 
 // --- Helpers ---
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -114,6 +113,29 @@ impl SharedGasManager {
     }
 }
 
+// Local Calc V3 Price from sqrtPriceX96
+fn calculate_v3_amount_out(
+    amount_in: U256,
+    sqrt_price_x96: U256,
+    token_in: Address,
+    token0: Address,
+) -> U256 {
+    let q96 = U256::from(2).pow(U256::from(96));
+    if token_in == token0 {
+        // output = input * (sqrtPrice / 2^96)^2
+        let numerator = amount_in
+            .saturating_mul(sqrt_price_x96)
+            .saturating_mul(sqrt_price_x96);
+        let denominator = q96.saturating_mul(q96);
+        numerator.checked_div(denominator).unwrap_or_default()
+    } else {
+        // output = input / (sqrtPrice / 2^96)^2
+        let numerator = amount_in.saturating_mul(q96).saturating_mul(q96);
+        let denominator = sqrt_price_x96.saturating_mul(sqrt_price_x96);
+        numerator.checked_div(denominator).unwrap_or_default()
+    }
+}
+
 // Core Quote Function
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
@@ -123,7 +145,7 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // V2
+        // --- V2 Logic ---
         let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
@@ -140,30 +162,39 @@ async fn get_amount_out(
             .call()
             .await
             .map_err(|e| anyhow!("V2 t0: {}", e))?;
+
         let (reserve_in, reserve_out) = if t0 == token_in { (r0, r1) } else { (r1, r0) };
         if reserve_in.is_zero() || reserve_out.is_zero() {
             return Err(anyhow!("Empty V2 reserves"));
         }
+
         let fee_bps = U256::from(pool.fee);
         let amount_in_with_fee = amount_in * (U256::from(1000000) - fee_bps);
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // CL (Aerodrome)
-        let quoter = IMixedRouteQuoterV1::new(pool.quoter, client);
-        let params = QuoteExactInputSingleV2Params {
-            token_in,
-            token_out,
-            amount_in,
-            fee: pool.fee,
-            sqrt_price_limit_x96: U256::zero(),
-        };
-        // 这里的报错会被外层捕获并打印
-        let (amount_out, _, _, _) = quoter.quote_exact_input_single_v2(params).call().await?;
-        Ok(amount_out)
+        // --- CL Logic (Local Slot0) ---
+        // 直接读池子，不求人，不报错
+        let pool_contract = ICLPool::new(pool.quoter, client.clone());
+        let (sqrt_price, _, _, _, _, _) = pool_contract
+            .slot_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL Slot0 fail: {}", e))?;
+        let token0 = pool_contract
+            .token_0()
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL Token0 fail: {}", e))?;
+
+        let raw_out = calculate_v3_amount_out(amount_in, U256::from(sqrt_price), token_in, token0);
+        // 模拟扣费
+        let fee_ppm = U256::from(pool.fee); // 3000
+        let out_after_fee = raw_out * (U256::from(1000000) - fee_ppm) / U256::from(1000000);
+        Ok(out_after_fee)
     } else {
-        // V3 (Uniswap)
+        // --- V3 Logic (Uniswap Quoter) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -189,7 +220,7 @@ struct ArbPath {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.2 (Deep Debug & Triangles)");
+    info!("🚀 System Starting: Base Bot V5.3 (Local Calc + Triangles)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -200,11 +231,8 @@ async fn main() -> Result<()> {
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
     let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
     let weth = Address::from_str(WETH_ADDR)?;
-    let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
 
     let mut pools = Vec::new();
-    let mut cl_pool_sample: Option<PoolConfig> = None;
-
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
@@ -218,55 +246,17 @@ async fn main() -> Result<()> {
             0
         };
 
-        if proto_code == 2 && quoter_addr == uniswap_quoter_addr {
-            error!(
-                "❌ CRITICAL: Pool '{}' uses Uniswap Quoter but is marked as CL!",
-                cfg.name
-            );
-            panic!("Config error");
-        }
-
-        let p_config = PoolConfig {
-            name: cfg.name.clone(),
+        pools.push(PoolConfig {
+            name: cfg.name,
             router: Address::from_str(&cfg.router)?,
             quoter: quoter_addr,
             fee: cfg.fee,
             token_a,
             token_b,
             protocol: proto_code,
-        };
-        pools.push(p_config.clone());
-
-        if proto_code == 2 && cl_pool_sample.is_none() {
-            cl_pool_sample = Some(p_config);
-        }
+        });
     }
     info!("✅ Loaded {} Pools.", pools.len());
-
-    // --- 🕵️‍♂️ Pre-flight Check: Test CL Quoter ---
-    if let Some(cl_pool) = cl_pool_sample {
-        info!(
-            "🕵️‍♂️ Performing Pre-flight Check on CL Pool: {}",
-            cl_pool.name
-        );
-        let test_amount = parse_ether("0.001").unwrap();
-        // Try WETH -> Token or Token -> WETH
-        let (t_in, t_out) = if cl_pool.token_a == weth {
-            (cl_pool.token_a, cl_pool.token_b)
-        } else {
-            (cl_pool.token_b, cl_pool.token_a)
-        };
-
-        match get_amount_out(client.clone(), &cl_pool, t_in, t_out, test_amount).await {
-            Ok(amt) => info!("✅ CL Quoter Verification PASSED. Output: {} Wei", amt),
-            Err(e) => {
-                error!("❌ CL Quoter Verification FAILED: {:?}", e);
-                info!("⚠️ System will start, but CL paths may fail.");
-            }
-        }
-    } else {
-        info!("⚠️ No CL pools found to verify.");
-    }
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
@@ -298,7 +288,7 @@ async fn main() -> Result<()> {
 
         let mut candidates = Vec::new();
 
-        // 2-Hop
+        // 2-Hop Logic
         for i in 0..pools.len() {
             for j in 0..pools.len() {
                 if i == j {
@@ -329,7 +319,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        // 3-Hop (Triangular) - 修正版
+        // 3-Hop Logic
         for i in 0..pools.len() {
             let pa = &pools[i];
             if pa.token_a != weth_addr_parsed && pa.token_b != weth_addr_parsed {
@@ -346,14 +336,12 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 let pb = &pools[j];
-
-                // 关键修正：第二跳 pb 绝对不能包含 WETH，否则就是 2-hop 退化
+                // 强制第二跳不含 WETH，逼出真正三角
                 let pb_has_weth = pb.token_a == weth_addr_parsed || pb.token_b == weth_addr_parsed;
                 if pb_has_weth {
                     continue;
                 }
 
-                // pb 必须连接 token_1
                 if pb.token_a != token_1 && pb.token_b != token_1 {
                     continue;
                 }
@@ -368,7 +356,6 @@ async fn main() -> Result<()> {
                         continue;
                     }
                     let pc = &pools[k];
-                    // pc 必须连接 token_2 和 WETH
                     let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
                     let pc_has_weth =
                         pc.token_a == weth_addr_parsed || pc.token_b == weth_addr_parsed;
@@ -399,11 +386,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(e) => {
-                        // 打印前几条错误，避免刷屏
-                        warn!("❌ S1 Fail [{}]: {:?}", path.pools[0].name, e);
-                        return None;
-                    }
+                    Err(_) => return None,
                 };
                 // Step 2
                 amt = match get_amount_out(
@@ -416,10 +399,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(a) => a,
-                    Err(e) => {
-                        warn!("❌ S2 Fail [{}]: {:?}", path.pools[1].name, e);
-                        return None;
-                    }
+                    Err(_) => return None,
                 };
                 // Step 3
                 if path.is_triangle {
@@ -433,10 +413,7 @@ async fn main() -> Result<()> {
                     .await
                     {
                         Ok(a) => a,
-                        Err(e) => {
-                            warn!("❌ S3 Fail [{}]: {:?}", path.pools[2].name, e);
-                            return None;
-                        }
+                        Err(_) => return None,
                     };
                 }
                 Some((path, amt))
