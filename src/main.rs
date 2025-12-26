@@ -972,7 +972,7 @@ async fn main() -> Result<()> {
                     let mut path_is_ok = false;
                     let mut path_is_profitable = false;
                     let mut best_gross = I256::from(i64::MIN);
-                    let mut best_report = String::new();
+                    let mut best_size = U256::zero();
                     let mut found_any = false;
 
                     let start_token = path.tokens[0];
@@ -1082,32 +1082,9 @@ async fn main() -> Result<()> {
                             let net = gross - gas_cost;
 
                             found_any = true;
-                            if gross > best_gross {
+                            if gross > best_gross { // Note: We are tracking the best *gross* profit size
                                 best_gross = gross;
-                                let route_name = if path.is_triangle {
-                                    format!(
-                                        "{}->{}->{}",
-                                        path.pools[0].name, path.pools[1].name, path.pools[2].name
-                                    )
-                                } else {
-                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
-                                };
-
-                                let net_bps: i128 = if size.as_u128() > 0 {
-                                    (net.as_i128() * 10_000i128) / (size.as_u128() as i128)
-                                } else {
-                                    0
-                                };
-
-                                best_report = format!(
-                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
-                                    route_name,
-                                    format_token_amount(size, path.tokens[0]),
-                                    gross,
-                                    net,
-                                    gas_cost,
-                                    net_bps
-                                );
+                                best_size = size;
                             }
 
                             // 3. 统一计价：用 Net(BPS) 判定盈利
@@ -1187,34 +1164,54 @@ async fn main() -> Result<()> {
                         failed_paths.fetch_add(1, Ordering::Relaxed);
                     }
 
+                    // --- WATCH Log Generation (Post-computation) ---
+                    // This block now runs *after* iterating all sizes for a path.
+                    // It uses the best found gross profit to generate a single, accurate WATCH log.
                     if found_any {
-                        // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
-                        let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
-                        let gas_cost_wei = U256::from(gas_used) * gas_price;
+                        // Only generate WATCH logs for tokens where we can accurately price gas.
+                        // This prevents printing misleading "Gas: 0" logs for other tokens.
+                        if can_price_gas {
+                            let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
+                            let gas_cost_wei = U256::from(gas_used) * gas_price;
 
-                        let gas_cost_display = if start_token == weth {
-                            I256::from(gas_cost_wei.as_u128())
-                        } else if (start_token == usdc || start_token == usdbc)
-                            && !eth_price_usdc.is_zero()
-                        {
-                            let gas_usdc =
-                                (gas_cost_wei * eth_price_usdc) / U256::from(10).pow(18.into());
-                            I256::from(gas_usdc.as_u128())
-                        } else {
-                            I256::zero()
-                        };
+                            let gas_cost_display = if start_token == weth {
+                                I256::from(gas_cost_wei.as_u128())
+                            } else {
+                                // This branch is only for USDC/USDbC now
+                                let gas_usdc = (gas_cost_wei * eth_price_usdc)
+                                    / U256::from(10).pow(18.into());
+                                I256::from(gas_usdc.as_u128())
+                            };
 
-                        let best_net = best_gross - gas_cost_display;
+                            let best_net = best_gross - gas_cost_display;
 
-                        // 修正 WATCH 阈值：USDC 用 -0.05，ETH 用 -0.00005
-                        let near_threshold = if start_token == usdc || start_token == usdbc {
-                            I256::from(-50_000i128)
-                        } else {
-                            I256::from(-50_000_000_000_000i128)
-                        };
+                            let near_threshold = if start_token == usdc || start_token == usdbc {
+                                I256::from(-50_000i128) // -0.05 USDC
+                            } else {
+                                // WETH
+                                I256::from(-50_000_000_000_000i128) // -0.00005 ETH
+                            };
 
-                        if best_net > near_threshold {
-                            info!("{}", best_report);
+                            if best_net > near_threshold {
+                                let net_bps: i128 = if best_size.as_u128() > 0 {
+                                    (best_net.as_i128() * 10_000i128)
+                                        / (best_size.as_u128() as i128)
+                                } else {
+                                    0
+                                };
+
+                                let route_name = if path.is_triangle {
+                                    format!("{}->{}->{}", path.pools[0].name, path.pools[1].name, path.pools[2].name)
+                                } else {
+                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
+                                };
+
+                                let report = format!(
+                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
+                                    route_name, format_token_amount(best_size, start_token), best_gross, best_net, gas_cost_display, net_bps
+                                );
+                                info!("{}", report);
+                            }
                         }
                     }
                 }
