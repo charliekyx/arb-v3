@@ -145,5 +145,52 @@
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
         "fee": 1,
         "protocol": "cl"
+    },
+    {
+        "name": "Uniswap_cbETH_WETH_0.01%",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 100,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_cbETH_WETH_CL_0.01%",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "pool": "0x98160B80081c7e92B2163b21F9856A9933D72B8B",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
+        "fee": 100,
+        "protocol": "cl"
+    },
+    {
+        "name": "Uniswap_cbETH_USDC_0.05%",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 500,
+        "protocol": "v3"
+    },
+    {
+        "name": "Uniswap_ezETH_WETH_0.05%",
+        "token_a": "0x2416092f14339098a3e39485637adBe91430b63b",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 500,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_ezETH_WETH_CL_0.05%",
+        "token_a": "0x2416092f14339098a3e39485637adBe91430b63b",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "pool": "0x5Be7c2d966779430c69992BfA149959560416956",
+        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
+        "fee": 500,
+        "protocol": "cl"
     }
 ]
