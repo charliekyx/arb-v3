@@ -169,7 +169,7 @@
         "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185abd7aa3Fa232406",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0xBE0834B7669d038374a2f8615A1A4067332C7991",
+        "pool": "0x3368940C68E773405788531773076136B0B820F7",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
         "fee": 100,
         "protocol": "cl"
@@ -179,7 +179,7 @@
         "token_a": "0x2416092f14339098a3e39485637adBe91430b63b",
         "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0x7179D19E5a72C41477759A76632De2C730A7B132",
+        "pool": "0xd1bA8D15E5E994646736735e2373C33737b77943",
         "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
         "fee": 500,
         "protocol": "cl"
