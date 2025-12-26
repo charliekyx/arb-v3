@@ -161,7 +161,7 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
 
             // 授权 Router (如果还没授权)
             // 注意：生产环境建议owner提前approve好，省gas。这里为了方便保留。
-            IERC20(step.tokenIn).approve(step.router, currentAmount);
+            // IERC20(step.tokenIn).approve(step.router, currentAmount);
 
             if (step.protocol == 1) {
                 // --- V2 (Aerodrome Classic) ---
