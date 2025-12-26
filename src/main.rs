@@ -64,10 +64,10 @@ abigen!(
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
-    IMixedRouteQuoterV1,
+    IAerodromeCLQuoter,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
-        function quoteExactInputSingleV2(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+        function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut)
     ]"#;
 
     ICLPool,
@@ -226,15 +226,15 @@ async fn get_amount_out(
             .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
     } else if pool.protocol == 2 {
         if let Some(q) = pool.quoter {
-            let quoter = IMixedRouteQuoterV1::new(q, client.clone());
-            let params = i_mixed_route_quoter_v1::QuoteParams {
+            let quoter = IAerodromeCLQuoter::new(q, client.clone());
+            let params = i_aerodrome_cl_quoter::QuoteParams {
                 token_in,
                 token_out,
                 amount_in,
                 fee: pool.fee,
                 sqrt_price_limit_x96: U256::zero(),
             };
-            if let Ok((out, _, _, _)) = quoter.quote_exact_input_single_v2(params).call().await {
+            if let Ok(out) = quoter.quote_exact_input_single(params).call().await {
                 return Ok(out); // ✅ 只有 Quoter 给出的价格在大额时才可信
             }
         }
