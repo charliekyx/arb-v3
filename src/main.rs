@@ -72,7 +72,6 @@ abigen!(
     ]"#;
 
     // Aerodrome CL / Uniswap V3 Pool
-    // 注意：Rust ethers 会自动将 slot0 转换为 slot_0
     IAerodromeCLPool,
     r#"[
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
@@ -177,7 +176,6 @@ async fn get_amount_out(
         // --- CL Logic (Aerodrome Slipstream) ---
         let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
 
-        // 使用修正后的 slot_0 方法名
         let (sqrt_price_x96, _, _, _, _, _) = cl_pool
             .slot_0()
             .call()
@@ -191,18 +189,14 @@ async fn get_amount_out(
 
         let sqrt_price = U256::from(sqrt_price_x96);
 
-        // [修复点] 分步计算以防止 U256 溢出
+        // 分步计算以防止 U256 溢出
         let amount_out_raw = if token_in == t0 {
-            // 0 -> 1: price = (sqrtPrice / 2^96)^2
-            // Out = In * P * P / 2^192
-            // 优化: (In * P / 2^96) * P / 2^96
+            // 0 -> 1
             let step1 = amount_in.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
             let step2 = step1.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
             step2
         } else {
-            // 1 -> 0: price = 1 / ((sqrtPrice / 2^96)^2)
-            // Out = In * 2^192 / P^2
-            // 优化: (In * 2^96 / P) * 2^96 / P
+            // 1 -> 0
             if sqrt_price.is_zero() {
                 U256::zero()
             } else {
@@ -240,7 +234,7 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.4 (Final Fix)");
+    info!("🚀 System Starting: Base Bot V3.5 (Full Features)");
     info!("🔥 模式: Direct Pool Query (V2 & CL) + Quoter (V3)");
 
     let config = load_encrypted_config()?;
@@ -345,7 +339,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(e) => {
+                    Err(_e) => {
                         // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
@@ -359,14 +353,32 @@ async fn main() -> Result<()> {
         info!("--- Block {} Check ---", current_bn);
         for (pa, pb, out_eth) in results.into_iter().flatten() {
             if out_eth > borrow_amount {
+                // 赚钱
                 let profit = out_eth - borrow_amount;
-                info!(
-                    "💰 PROFIT: {} -> {} | +{} ETH",
-                    pa.name,
-                    pb.name,
-                    format_ether(profit)
+                let profit_eth = format_ether(profit);
+                let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                let net_status = if profit > parse_ether("0.00015").unwrap() {
+                    "🔥[HIGH]"
+                } else {
+                    "❄️[LOW]"
+                };
+
+                let log_msg = format!(
+                    "[{}] 💰 PROFIT: {} -> {} | +{} ETH ({})",
+                    timestamp, pa.name, pb.name, profit_eth, net_status
                 );
+                info!("{}", log_msg);
+
+                // [恢复] 写入 opportunities.txt
+                if let Ok(mut file) = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("opportunities.txt")
+                {
+                    let _ = writeln!(file, "{}", log_msg);
+                }
             } else {
+                // 亏钱
                 let loss = borrow_amount - out_eth;
                 info!(
                     "🧊 LOSS: {} -> {} | -{} ETH",
