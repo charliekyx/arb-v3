@@ -1,18 +1,18 @@
 [
     {
         "name": "Aerodrome_DEGEN_Volatile_V2",
-        "token_a": "...",
-        "token_b": "...",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "请填入真实的_DEGEN_WETH_Pair地址",
+        "quoter": "0x2C4909355b0C036840819484c3A882A95659aBf3",
         "fee": 3000,
         "protocol": "v2"
     },
     {
         "name": "Uniswap_BRETT_0.3%",
-        "token_a": "0x532f27101965dd16442E59d40670Fa5e651C09A5",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "...",
+        "router": "0x2626664c2603336e57b271c5c0b26f421741e481",
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
         "protocol": "v3"
