@@ -477,6 +477,21 @@ async fn validate_v2_pool(
     }
 }
 
+fn get_v2_amount_out_local(
+    amount_in: U256,
+    reserve_in: U256,
+    reserve_out: U256,
+    fee_bps: u32,
+) -> U256 {
+    if amount_in.is_zero() {
+        return U256::zero();
+    }
+    let amount_in_with_fee = amount_in * U256::from(10000 - fee_bps);
+    let numerator = amount_in_with_fee * reserve_out;
+    let denominator = (reserve_in * 10000) + amount_in_with_fee;
+    numerator.checked_div(denominator).unwrap_or_default()
+}
+
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -494,12 +509,36 @@ async fn get_amount_out(
     }
     if pool.protocol == 1 {
         let pair = IAerodromePair::new(pool.quoter.unwrap(), client);
-        // 只信链上给的结果，不信本地算的
-        return pair
-            .get_amount_out(amount_in, token_in)
+        let (r0, r1, _) = pair
+            .get_reserves()
             .call()
             .await
-            .map_err(|e| anyhow!("V2 On-chain Quote Fail: {}", e));
+            .map_err(|e| anyhow!("V2 getReserves failed: {}", e))?;
+
+        let token0 = if pool.token_a < pool.token_b {
+            pool.token_a
+        } else {
+            pool.token_b
+        };
+        let (reserve_in, reserve_out) = if token_in == token0 {
+            (r0, r1)
+        } else {
+            (r1, r0)
+        };
+
+        // BaseSwap usually 0.25% (25 bps), others 0.3% (30 bps)
+        let fee_bps = if pool.name.to_lowercase().contains("baseswap") {
+            25
+        } else {
+            30
+        };
+
+        Ok(get_v2_amount_out_local(
+            amount_in,
+            reserve_in,
+            reserve_out,
+            fee_bps,
+        ))
     } else if pool.protocol == 2 {
         let q = pool
             .quoter
@@ -642,6 +681,43 @@ async fn main() -> Result<()> {
         }
     }
     info!("✅ Active Pools: {}", pools.len());
+
+    // 1. "Big Cleanup": Remove pools that fail a tiny quote
+    info!("🧹 Starting Pre-flight Cleanup (Removing dead pools)...");
+    let mut clean_pools = Vec::new();
+
+    for pool in pools {
+        // For V2, we trust validate_v2_pool (getReserves check)
+        if pool.protocol == 1 {
+            clean_pools.push(pool);
+            continue;
+        }
+
+        // For V3/CL, probe with tiny amount
+        let test_amount = if pool.token_a == usdc || pool.token_b == usdc {
+            parse_units("0.1", 6).unwrap().into()
+        } else {
+            parse_units("0.0001", 18).unwrap().into()
+        };
+
+        // Try swap token_a -> token_b
+        if get_amount_out(
+            client.clone(),
+            &pool,
+            pool.token_a,
+            pool.token_b,
+            test_amount,
+        )
+        .await
+        .is_ok()
+        {
+            clean_pools.push(pool);
+        } else {
+            warn!("🗑️ Removing dead pool [{}]: Quote failed", pool.name);
+        }
+    }
+    pools = clean_pools;
+    info!("✨ Cleanup Complete. Valid Pools: {}", pools.len());
 
     // --- Static Probe for CL Quoter ---
     // AERO/USDC CL: 100 USDC -> AERO
@@ -991,8 +1067,16 @@ async fn main() -> Result<()> {
                                 );
                             }
 
-                            // 3. 只有 Net > 0 才算 Profitable (且记录 Opportunity)
-                            if can_price_gas && net > I256::zero() {
+                            // 3. 统一计价：用 Net(BPS) 判定盈利
+                            let net_is_profitable = if start_token == usdc || start_token == usdbc {
+                                net > I256::from(1000) // 盈利超过 0.001 USDC
+                            } else if start_token == weth {
+                                net > I256::from(1_000_000_000_000i128) // 盈利超过 0.000001 ETH
+                            } else {
+                                gross > I256::zero() // 其他币种暂时看毛利
+                            };
+
+                            if net_is_profitable {
                                 if !path_is_profitable {
                                     profitable_paths.fetch_add(1, Ordering::Relaxed);
                                     path_is_profitable = true;
