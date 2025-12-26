@@ -128,15 +128,6 @@
         "protocol": "v3"
     },
     {
-        "name": "Aerodrome_WETH_USDbC_V2",
-        "token_a": "0x4200000000000000000000000000000000000006",
-        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0xB4885Bc63399BF5518b994c1d0C153334Ee579D0",
-        "fee": 500,
-        "protocol": "v2"
-    },
-    {
         "name": "Aerodrome_USDC_USDbC_CL_0.01",
         "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
