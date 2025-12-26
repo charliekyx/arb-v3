@@ -3,7 +3,7 @@ use chrono::Local;
 use cocoon::Cocoon;
 use ethers::{
     prelude::*,
-    types::{Address, U256},
+    types::{Address, Bytes, U256},
     utils::{format_ether, parse_ether},
 };
 use futures::stream::{self, StreamExt};
@@ -58,11 +58,18 @@ abigen!(
         function executeArb(uint256 borrowAmount, SwapStep[] steps, uint256 minProfit) external
     ]"#;
 
-    // ✅ 统一使用 QuoterV2 接口 (Aerodrome Slipstream 也是 V2)
+    // ✅ Uniswap V3 Quoter (V2 Interface)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
+    ]"#;
+
+    // ✅ Aerodrome Slipstream Quoter (MixedRoute Interface)
+    // 关键修复：使用 quoteExactInput 接受 bytes path
+    IMixedRouteQuoter,
+    r#"[
+        function quoteExactInput(bytes path, uint256 amountIn) external returns (uint256 amountOut, uint160[] v3SqrtPriceX96AfterList, uint32[] v3InitializedTicksCrossedList, uint256 gasEstimate)
     ]"#;
 
     IAerodromePair,
@@ -113,6 +120,19 @@ impl SharedGasManager {
     }
 }
 
+// 🔥 关键辅助函数：构建 V3 Path (TokenIn + Fee + TokenOut)
+// 格式: [TokenIn 20bytes][Fee 3bytes][TokenOut 20bytes]
+fn encode_path(token_in: Address, token_out: Address, fee: u32) -> Bytes {
+    let mut path = Vec::with_capacity(43);
+    path.extend_from_slice(token_in.as_bytes());
+    // Fee 是 u24，但在 path 里是 3 bytes 大端序
+    path.push((fee >> 16) as u8);
+    path.push((fee >> 8) as u8);
+    path.push(fee as u8);
+    path.extend_from_slice(token_out.as_bytes());
+    Bytes::from(path)
+}
+
 // 核心：通用询价函数
 async fn get_amount_out(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
@@ -150,9 +170,21 @@ async fn get_amount_out(
         let numerator = amount_in_with_fee * reserve_out;
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
+    } else if pool.protocol == 2 {
+        // --- CL Logic (Aerodrome Slipstream) -> 使用 Path 询价 ---
+        // 修复：MixedRouteQuoter 必须使用 quoteExactInput(bytes path, uint amountIn)
+        let quoter = IMixedRouteQuoter::new(pool.quoter, client);
+        let path = encode_path(token_in, token_out, pool.fee);
+
+        let (amount_out, _, _, _) = quoter
+            .quote_exact_input(path, amount_in)
+            .call()
+            .await
+            .map_err(|e| anyhow!("CL MixedRoute revert: {}", e))?;
+
+        Ok(amount_out)
     } else {
-        // --- V3 & CL Logic (Unified Quoter V2) ---
-        // Aerodrome Slipstream 使用的是 QuoterV2 (Struct 参数)
+        // --- V3 Logic (Uniswap V3) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -161,13 +193,11 @@ async fn get_amount_out(
             fee: pool.fee,
             sqrt_price_limit_x96: U256::zero(),
         };
-
-        // 如果这里报错，99% 是因为该 Fee Tier 的池子不存在
         let (amount_out, _, _, _) = quoter
             .quote_exact_input_single(params)
             .call()
             .await
-            .map_err(|e| anyhow!("QuoterV2 revert: {}", e))?;
+            .map_err(|e| anyhow!("V3 Quoter revert: {}", e))?;
 
         Ok(amount_out)
     }
@@ -178,8 +208,8 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.7 (Correct Interface)");
-    info!("🔥 模式: V2(Reserves) + V3/CL(QuoterV2 Struct)");
+    info!("🚀 System Starting: Base Bot V3.8 (MixedRoute Path Fix)");
+    info!("🔥 模式: V2(Reserves) + CL(Path) + V3(Struct)");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -267,7 +297,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 依然保留 warn 以便确认是否是池子不存在
+                        // 保留 Warn，如果这次通过了，这些日志会自动消失
                         warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
