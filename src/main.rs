@@ -70,8 +70,7 @@ abigen!(
 
     IAerodromeCLQuoter,
     r#"[
-        struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
-        function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut)
+        function quoteExactInputSingle(address tokenIn, address tokenOut, int24 tickSpacing, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)
     ]"#;
 
     ICLPool,
@@ -222,17 +221,17 @@ async fn debug_quoter_raw(
     token_in: Address,
     token_out: Address,
     amount_in: U256,
-    fee: u32,
+    tick_spacing: i32,
 ) -> Result<()> {
-    // quoteExactInputSingle((address,address,uint256,uint24,uint160))
-    let sel = selector("quoteExactInputSingle((address,address,uint256,uint24,uint160))");
+    // quoteExactInputSingle(address,address,int24,uint256,uint160)
+    let sel = selector("quoteExactInputSingle(address,address,int24,uint256,uint160)");
     // ABI encode the tuple
     let tuple = Token::Tuple(vec![
         Token::Address(token_in),
         Token::Address(token_out),
+        Token::Int(I256::from(tick_spacing).into_raw()), // int24
         Token::Uint(amount_in),
-        Token::Uint(U256::from(fee)), // uint24 放进 uint256 encode 没问题（ABI 会截断/读取低位）
-        Token::Uint(U256::zero()),    // sqrtPriceLimitX96
+        Token::Uint(U256::zero()), // sqrtPriceLimitX96
     ]);
     let mut data = Vec::with_capacity(4 + 32 * 5);
     data.extend_from_slice(&sel);
@@ -358,14 +357,18 @@ async fn get_amount_out(
     } else if pool.protocol == 2 {
         if let Some(q) = pool.quoter {
             let quoter = IAerodromeCLQuoter::new(q, client.clone());
-            let params = i_aerodrome_cl_quoter::QuoteParams {
-                token_in,
-                token_out,
-                amount_in,
-                fee: pool.pool_fee,
-                sqrt_price_limit_x96: U256::zero(),
-            };
-            match quoter.quote_exact_input_single(params).call().await {
+            // ✅ 用 tickSpacing，而不是 pool_fee
+            match quoter
+                .quote_exact_input_single(
+                    token_in,
+                    token_out,
+                    pool.tick_spacing,
+                    amount_in,
+                    U256::zero(),
+                )
+                .call()
+                .await
+            {
                 Ok(out) => return Ok(out),
                 Err(e) => {
                     warn!("❌ CL Quoter revert/decode fail {}: {:?}", pool.name, e);
@@ -376,7 +379,7 @@ async fn get_amount_out(
                         token_in,
                         token_out,
                         amount_in,
-                        pool.pool_fee,
+                        pool.tick_spacing,
                     )
                     .await;
                 }
