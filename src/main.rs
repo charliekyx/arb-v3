@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(_e) => {
-                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
+                        warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, _e);
                         return None;
                     }
                 };
