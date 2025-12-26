@@ -73,7 +73,8 @@ abigen!(
     // Aerodrome CL / Uniswap V3 Pool
    IAerodromeCLPool,
     r#"[
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function token0() external view returns (address)
     ]"#
 );
 
@@ -173,7 +174,7 @@ async fn get_amount_out(
     } else if pool.protocol == 2 {
         // CL
         let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
-        let (sqrt_price_x96, _, _, _, _, _, _) = cl_pool
+        let (sqrt_price_x96, _, _, _, _, _) = cl_pool
             .slot_0()
             .call()
             .await
