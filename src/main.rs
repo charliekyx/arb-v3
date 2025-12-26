@@ -10,7 +10,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::Write,
     str::FromStr,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -71,7 +72,8 @@ abigen!(
     ]"#;
 
     // Aerodrome CL / Uniswap V3 Pool
-   IAerodromeCLPool,
+    // 注意：Rust ethers 会自动将 slot0 转换为 slot_0
+    IAerodromeCLPool,
     r#"[
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
         function token0() external view returns (address)
@@ -144,7 +146,7 @@ async fn get_amount_out(
     amount_in: U256,
 ) -> Result<U256> {
     if pool.protocol == 1 {
-        // V2
+        // --- V2 Logic (Aerodrome Basic) ---
         let pair = IAerodromePair::new(pool.quoter, client.clone());
         let r0 = pair
             .reserve_0()
@@ -172,8 +174,10 @@ async fn get_amount_out(
         let denominator = (reserve_in * U256::from(1000000)) + amount_in_with_fee;
         Ok(numerator / denominator)
     } else if pool.protocol == 2 {
-        // CL
+        // --- CL Logic (Aerodrome Slipstream) ---
         let cl_pool = IAerodromeCLPool::new(pool.quoter, client.clone());
+
+        // 使用修正后的 slot_0 方法名
         let (sqrt_price_x96, _, _, _, _, _) = cl_pool
             .slot_0()
             .call()
@@ -186,26 +190,38 @@ async fn get_amount_out(
             .map_err(|e| anyhow!("CL t0: {}", e))?;
 
         let sqrt_price = U256::from(sqrt_price_x96);
+
+        // [修复点] 分步计算以防止 U256 溢出
         let amount_out_raw = if token_in == t0 {
             // 0 -> 1: price = (sqrtPrice / 2^96)^2
-            let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
-            amount_in.checked_mul(p2).unwrap_or(U256::zero()) >> 192
+            // Out = In * P * P / 2^192
+            // 优化: (In * P / 2^96) * P / 2^96
+            let step1 = amount_in.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
+            let step2 = step1.checked_mul(sqrt_price).unwrap_or(U256::zero()) >> 96;
+            step2
         } else {
             // 1 -> 0: price = 1 / ((sqrtPrice / 2^96)^2)
-            let p2 = sqrt_price.checked_mul(sqrt_price).unwrap_or(U256::zero());
-            if p2.is_zero() {
+            // Out = In * 2^192 / P^2
+            // 优化: (In * 2^96 / P) * 2^96 / P
+            if sqrt_price.is_zero() {
                 U256::zero()
             } else {
-                let num = amount_in << 192;
-                num.checked_div(p2).unwrap_or(U256::zero())
+                let step1 = (amount_in << 96)
+                    .checked_div(sqrt_price)
+                    .unwrap_or(U256::zero());
+                let step2 = (step1 << 96)
+                    .checked_div(sqrt_price)
+                    .unwrap_or(U256::zero());
+                step2
             }
         };
+
         // 扣除手续费
         let fee_bps = U256::from(pool.fee);
         let amount_out = amount_out_raw * (U256::from(1000000) - fee_bps) / U256::from(1000000);
         Ok(amount_out)
     } else {
-        // V3 Quoter
+        // --- V3 Quoter Logic (Default) ---
         let quoter = IQuoterV2::new(pool.quoter, client);
         let params = QuoteParams {
             token_in,
@@ -224,7 +240,7 @@ async fn get_amount_out(
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V3.2 (Debug Mode)");
+    info!("🚀 System Starting: Base Bot V3.4 (Final Fix)");
     info!("🔥 模式: Direct Pool Query (V2 & CL) + Quoter (V3)");
 
     let config = load_encrypted_config()?;
@@ -314,7 +330,6 @@ async fn main() -> Result<()> {
                 {
                     Ok(amt) => amt,
                     Err(e) => {
-                        // 👉 这里我开启了报错日志，这样你就能看到为什么 BRETT/TOSHI 失败了
                         warn!("⚠️ Step A [{}] Fail: {:?}", pa.name, e);
                         return None;
                     }
@@ -330,7 +345,7 @@ async fn main() -> Result<()> {
                 .await
                 {
                     Ok(amt) => amt,
-                    Err(_) => {
+                    Err(e) => {
                         // warn!("⚠️ Step B [{}] Fail: {:?}", pb.name, e);
                         return None;
                     }
