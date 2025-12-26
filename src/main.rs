@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use cocoon::Cocoon;
+use dashmap::DashMap;
 use ethers::abi::{encode, Token};
 use ethers::{
     prelude::*,
@@ -549,6 +550,7 @@ async fn main() -> Result<()> {
     let wallet = LocalWallet::from_str(&config.private_key)?.with_chain_id(8453u64);
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
+    let pool_failures: Arc<DashMap<String, u32>> = Arc::new(DashMap::new());
     let mut probed_quoters = std::collections::HashSet::new();
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
@@ -700,7 +702,21 @@ async fn main() -> Result<()> {
         let _gas_cost_2hop = (gas_price * U256::from(300_000)).as_u128();
         let _gas_cost_3hop = (gas_price * U256::from(450_000)).as_u128();
 
+        // 1. 获取 ETH -> USDC 的参考价格 (用于统一计价 Gas)
+        let mut eth_price_usdc = U256::zero();
+        if let Some(p) = pools.iter().find(|p| {
+            (p.token_a == weth && p.token_b == usdc) || (p.token_b == weth && p.token_a == usdc)
+        }) {
+            // 尝试用 1 WETH 询价
+            if let Ok(price) =
+                get_amount_out(client.clone(), p, weth, usdc, parse_ether("1").unwrap()).await
+            {
+                eth_price_usdc = price;
+            }
+        }
+
         let mut candidates = Vec::new();
+        let max_failures = 5;
 
         // 遍历所有基准代币，寻找以它为起点的套利路径
         for &base_token in &base_tokens {
@@ -709,6 +725,18 @@ async fn main() -> Result<()> {
             for i in 0..pools.len() {
                 for j in 0..pools.len() {
                     if i == j {
+                        continue;
+                    }
+                    // Blacklist check
+                    if pool_failures
+                        .get(&pools[i].name)
+                        .map(|c| *c > max_failures)
+                        .unwrap_or(false)
+                        || pool_failures
+                            .get(&pools[j].name)
+                            .map(|c| *c > max_failures)
+                            .unwrap_or(false)
+                    {
                         continue;
                     }
                     // 池子 A 包含 base_token，池子 B 也包含 base_token
@@ -755,6 +783,18 @@ async fn main() -> Result<()> {
                     if i == j {
                         continue;
                     }
+                    // Blacklist check for i, j
+                    if pool_failures
+                        .get(&pools[i].name)
+                        .map(|c| *c > max_failures)
+                        .unwrap_or(false)
+                        || pool_failures
+                            .get(&pools[j].name)
+                            .map(|c| *c > max_failures)
+                            .unwrap_or(false)
+                    {
+                        continue;
+                    }
                     let pb = &pools[j];
 
                     // 必须包含 token_1
@@ -774,6 +814,14 @@ async fn main() -> Result<()> {
 
                     for k in 0..pools.len() {
                         if k == i || k == j {
+                            continue;
+                        }
+                        // Blacklist check for k
+                        if pool_failures
+                            .get(&pools[k].name)
+                            .map(|c| *c > max_failures)
+                            .unwrap_or(false)
+                        {
                             continue;
                         }
                         let pc = &pools[k];
@@ -799,6 +847,7 @@ async fn main() -> Result<()> {
         let ok_paths_ref = ok_paths.clone();
         let profitable_paths_ref = profitable_paths.clone();
         let failed_paths_ref = failed_paths.clone();
+        let pool_failures_ref = pool_failures.clone();
 
         // 核心逻辑：遍历 candidates 路径
         stream::iter(candidates)
@@ -806,6 +855,7 @@ async fn main() -> Result<()> {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
                 let failed_paths = failed_paths_ref.clone();
+                let pool_failures = pool_failures_ref.clone();
                 async move {
                     let mut path_is_ok = false;
                     let mut path_is_profitable = false;
@@ -857,9 +907,13 @@ async fn main() -> Result<()> {
                                     warn!(
                                         "⚠️ Path failed at {} (Size: {}): {:?}",
                                         path.pools[i].name,
-                                        format_ether(size),
+                                        format_token_amount(size, start_token), // 修正日志显示
                                         e
                                     );
+                                    pool_failures
+                                        .entry(path.pools[i].name.clone())
+                                        .and_modify(|c| *c += 1)
+                                        .or_insert(1);
                                     failed = true;
                                     break;
                                 }
@@ -883,7 +937,23 @@ async fn main() -> Result<()> {
 
                             // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
                             let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
-                            let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
+                            let gas_cost_wei = U256::from(gas_used) * gas_price;
+
+                            // 2. 统一计价 Net (USDC or Base Token)
+                            let gas_cost = if start_token == weth {
+                                I256::from(gas_cost_wei.as_u128())
+                            } else if (start_token == usdc || start_token == usdbc)
+                                && !eth_price_usdc.is_zero()
+                            {
+                                // Gas(Wei) -> USDC: (gas_wei * eth_price_usdc) / 1e18
+                                let gas_usdc =
+                                    (gas_cost_wei * eth_price_usdc) / U256::from(10).pow(18.into());
+                                I256::from(gas_usdc.as_u128())
+                            } else {
+                                // 其他币种暂时无法精确计价 Gas，设为 0 避免 Net 出现巨大负数误导
+                                I256::zero()
+                            };
+
                             let net = gross - gas_cost;
 
                             found_any = true;
@@ -907,8 +977,8 @@ async fn main() -> Result<()> {
                                 );
                             }
 
-                            // 只要毛利为正，就记录“证据”
-                            if gross > I256::zero() {
+                            // 3. 只有 Net > 0 才算 Profitable (且记录 Opportunity)
+                            if net > I256::zero() {
                                 if !path_is_profitable {
                                     profitable_paths.fetch_add(1, Ordering::Relaxed);
                                     path_is_profitable = true;
@@ -943,8 +1013,21 @@ async fn main() -> Result<()> {
                     if found_any {
                         // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
                         let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
-                        let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
-                        let best_net = best_gross - gas_cost;
+                        let gas_cost_wei = U256::from(gas_used) * gas_price;
+
+                        let gas_cost_display = if start_token == weth {
+                            I256::from(gas_cost_wei.as_u128())
+                        } else if (start_token == usdc || start_token == usdbc)
+                            && !eth_price_usdc.is_zero()
+                        {
+                            let gas_usdc =
+                                (gas_cost_wei * eth_price_usdc) / U256::from(10).pow(18.into());
+                            I256::from(gas_usdc.as_u128())
+                        } else {
+                            I256::zero()
+                        };
+
+                        let best_net = best_gross - gas_cost_display;
 
                         // 仅当最佳档位的净利 > -0.00005 ETH 时才显示（接近盈利）
                         if best_net > I256::from(-50_000_000_000_000i128) {
