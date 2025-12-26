@@ -86,6 +86,8 @@ abigen!(
 );
 
 const WETH_ADDR: &str = "0x4200000000000000000000000000000000000006";
+const USDC_ADDR: &str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const USDBC_ADDR: &str = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
 const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 
@@ -154,6 +156,22 @@ fn append_log_to_file(msg: &str) {
     }
 }
 
+fn pool_supports(pool: &PoolConfig, token_in: Address, token_out: Address) -> bool {
+    (pool.token_a == token_in && pool.token_b == token_out)
+        || (pool.token_a == token_out && pool.token_b == token_in)
+}
+
+fn format_token_amount(amount: U256, token: Address) -> String {
+    let usdc = Address::from_str(USDC_ADDR).unwrap();
+    let usdbc = Address::from_str(USDBC_ADDR).unwrap();
+
+    if token == usdc || token == usdbc {
+        format_units(amount, 6).unwrap_or_else(|_| "0.0".to_string())
+    } else {
+        format_ether(amount)
+    }
+}
+
 fn calculate_v3_amount_out(
     amount_in: U256,
     sqrt_price_x96: U256,
@@ -217,6 +235,14 @@ async fn get_amount_out(
     token_out: Address,
     amount_in: U256,
 ) -> Result<U256> {
+    if !pool_supports(pool, token_in, token_out) {
+        return Err(anyhow!(
+            "Pool mismatch: {} cannot swap {:?} -> {:?}",
+            pool.name,
+            token_in,
+            token_out
+        ));
+    }
     if pool.protocol == 1 {
         let pair = IAerodromePair::new(pool.quoter.unwrap(), client);
         // 只信链上给的结果，不信本地算的
@@ -450,9 +476,9 @@ async fn main() -> Result<()> {
                     }
                     let pc = &pools[k];
                     let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                    // let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
+                    let pc_has_weth = pc.token_a == weth || pc.token_b == weth;
 
-                    if pc_has_token2 {
+                    if pc_has_token2 && pc_has_weth {
                         candidates.push(ArbPath {
                             pools: vec![pa.clone(), pb.clone(), pc.clone()],
                             tokens: vec![weth, token_1, token_2, weth],
@@ -543,7 +569,7 @@ async fn main() -> Result<()> {
                                 best_report = format!(
                                     "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {})",
                                     route_name,
-                                    format_ether(size),
+                                    format_token_amount(size, path.tokens[0]),
                                     gross,
                                     net,
                                     gas_cost
@@ -560,8 +586,8 @@ async fn main() -> Result<()> {
                                     report.push_str(&format!(
                                         "  Step {}: {} -> {} via {}\n",
                                         idx + 1,
-                                        format_ether(*inp),
-                                        format_ether(*outp),
+                                        format_token_amount(*inp, path.tokens[idx]),
+                                        format_token_amount(*outp, path.tokens[idx + 1]),
                                         p_name
                                     ));
                                 }
