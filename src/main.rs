@@ -200,7 +200,13 @@ async fn validate_cl_pool(
         let contract = ICLPool::new(pool_addr, client);
         match contract.slot_0().call().await {
             Ok(_) => true,
-            Err(_) => false,
+            Err(e) => {
+                warn!(
+                    "❌ CL Pool {} slot0() failed @ {:?}: {:?}",
+                    pool.name, pool_addr, e
+                );
+                false
+            }
         }
     } else {
         false
@@ -491,14 +497,21 @@ async fn main() -> Result<()> {
 
         let total_candidates = candidates.len();
         let ok_paths = Arc::new(AtomicUsize::new(0));
+        let profitable_paths = Arc::new(AtomicUsize::new(0));
+        let failed_paths = Arc::new(AtomicUsize::new(0));
         let ok_paths_ref = ok_paths.clone();
+        let profitable_paths_ref = profitable_paths.clone();
+        let failed_paths_ref = failed_paths.clone();
 
         // 核心逻辑：遍历 candidates 路径
         stream::iter(candidates)
             .for_each_concurrent(10, |path| {
                 let ok_paths = ok_paths_ref.clone();
+                let profitable_paths = profitable_paths_ref.clone();
+                let failed_paths = failed_paths_ref.clone();
                 async move {
-                    let mut path_profitable = false;
+                    let mut path_is_ok = false;
+                    let mut path_is_profitable = false;
                     let mut best_gross = I256::from(i64::MIN);
                     let mut best_report = String::new();
                     let mut found_any = false;
@@ -538,9 +551,9 @@ async fn main() -> Result<()> {
                         if !failed {
                             // 🔥 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
                             // 这样 OkPaths 就会显示所有能跑通的路径数量，而不仅仅是盈利的
-                            if !path_profitable {
+                            if !path_is_ok {
                                 ok_paths.fetch_add(1, Ordering::Relaxed);
-                                path_profitable = true;
+                                path_is_ok = true;
                             }
 
                             // 计算毛利
@@ -578,6 +591,11 @@ async fn main() -> Result<()> {
 
                             // 只要毛利为正，就记录“证据”
                             if gross > I256::zero() {
+                                if !path_is_profitable {
+                                    profitable_paths.fetch_add(1, Ordering::Relaxed);
+                                    path_is_profitable = true;
+                                }
+
                                 let mut report = format!(
                                     "--- Opportunity (Size: {} ETH) ---\n",
                                     format_ether(size)
@@ -600,6 +618,10 @@ async fn main() -> Result<()> {
                         }
                     }
 
+                    if !path_is_ok {
+                        failed_paths.fetch_add(1, Ordering::Relaxed);
+                    }
+
                     if found_any {
                         // 仅当最佳档位的毛利 > -0.001 ETH 时才显示（过滤掉必死路径）
                         if best_gross > I256::from(-1000000000000000i128) {
@@ -612,9 +634,16 @@ async fn main() -> Result<()> {
 
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
         let ok_paths_count = ok_paths.load(Ordering::Relaxed);
+        let profitable_paths_count = profitable_paths.load(Ordering::Relaxed);
+        let failed_paths_count = failed_paths.load(Ordering::Relaxed);
         info!(
-            "--- Block {} | Gas: {} gwei | Cands: {} -> OkPaths: {} ---",
-            current_bn, gas_gwei, total_candidates, ok_paths_count
+            "--- Block {} | Gas: {} gwei | Cands: {} -> Ok: {} -> Profitable: {} -> Failed: {} ---",
+            current_bn,
+            gas_gwei,
+            total_candidates,
+            ok_paths_count,
+            profitable_paths_count,
+            failed_paths_count
         );
     }
 
