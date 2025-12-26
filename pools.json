@@ -16,5 +16,41 @@
         "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
         "fee": 3000,
         "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_BRETT_Volatile_V2",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x214356Cc4aAb907244A791CA9735292860490D5A",
+        "fee": 3000,
+        "protocol": "v2"
+    },
+    {
+        "name": "Uniswap_BRETT_0.3%",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 3000,
+        "protocol": "v3"
+    },
+    {
+        "name": "Aerodrome_TOSHI_Volatile_V2",
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "quoter": "0x081E4455d91726212D1fa9AfFeE80637D1f7bE8E",
+        "fee": 3000,
+        "protocol": "v2"
+    },
+    {
+        "name": "Uniswap_TOSHI_0.3%",
+        "token_a": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "fee": 3000,
+        "protocol": "v3"
     }
 ]
