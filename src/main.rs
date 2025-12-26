@@ -816,19 +816,15 @@ async fn main() -> Result<()> {
                     let start_token = path.tokens[0];
                     let test_sizes = if decimals(start_token) == 6 {
                         vec![
-                            parse_amount("100", start_token),
-                            parse_amount("500", start_token),
                             parse_amount("1000", start_token),
-                            parse_amount("2000", start_token),
                             parse_amount("5000", start_token),
+                            parse_amount("10000", start_token),
                         ]
                     } else {
                         vec![
-                            parse_amount("0.1", start_token),
-                            parse_amount("0.5", start_token),
                             parse_amount("1", start_token),
-                            parse_amount("2", start_token),
                             parse_amount("5", start_token),
+                            parse_amount("10", start_token),
                         ]
                     };
 
@@ -950,8 +946,8 @@ async fn main() -> Result<()> {
                         let gas_cost = I256::from((gas_price * U256::from(gas_used)).as_u128());
                         let best_net = best_gross - gas_cost;
 
-                        // 仅当最佳档位的净利 > -0.0001 ETH 时才显示（接近盈利）
-                        if best_net > I256::from(-100_000_000_000_000i128) {
+                        // 仅当最佳档位的净利 > -0.00005 ETH 时才显示（接近盈利）
+                        if best_net > I256::from(-50_000_000_000_000i128) {
                             info!("{}", best_report);
                         }
                     }

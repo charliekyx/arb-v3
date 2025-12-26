@@ -1,174 +1,532 @@
 [
     {
-        "name": "Aerodrome_AERO_USDC_CL_0.01",
+        "name": "Aerodrome_AERO_USDC_V2",
         "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x6cDcb1C4A4D1C3C6d054b27AC5B77e89eAFb971d",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0xa4FDd479eda160671636e2eCF8f993Cbf86258a8",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 100,
-        "pool_fee": 500,
-        "protocol": "cl"
+        "protocol": "v2",
+        "quoter": "0x6cDcb1C4A4D1C3C6d054b27AC5B77e89eAFb971d",
+        "fee": 3000
     },
     {
         "name": "Aerodrome_AERO_USDC_V2",
         "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xa4FDd479eda160671636e2eCF8f993Cbf86258a8",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x6cDcb1C4A4D1C3C6d054b27AC5B77e89eAFb971d",
-        "fee": 3000,
-        "protocol": "v2"
+        "protocol": "v2",
+        "quoter": "0xa4FDd479eda160671636e2eCF8f993Cbf86258a8",
+        "fee": 3000
     },
     {
-        "name": "Uniswap_AERO_0.3%",
-        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
-        "protocol": "v3"
-    },
-    {
-        "name": "Uniswap_USDC_WETH_0.05%",
-        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 500,
-        "protocol": "v3"
-    },
-    {
-        "name": "Uniswap_AERO_USDC_0.3%",
+        "name": "Aerodrome_AERO_USDC_V2",
         "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
-        "protocol": "v3"
+        "pool": "0xBE00fF35AF70E8415D0eB605a286D8A45466A4c1",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xBE00fF35AF70E8415D0eB605a286D8A45466A4c1",
+        "fee": 3000
     },
     {
-        "name": "Aerodrome_wstETH_CL",
-        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "name": "Aerodrome_AERO_USDC_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x861Ee8B9F7e42eDCF4f1B5614c6595F71A879f3f",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x861Ee8B9F7e42eDCF4f1B5614c6595F71A879f3f",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_AERO_USDbC_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x2223F9FE624F69Da4D8256A7bCc9104FBA7F8f75",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x2223F9FE624F69Da4D8256A7bCc9104FBA7F8f75",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_AERO_WETH_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x7f670f78B17dEC44d5Ef68a48740b6f8849cc2e6",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 1,
-        "pool_fee": 90,
-        "protocol": "cl"
+        "protocol": "v2",
+        "quoter": "0x7f670f78B17dEC44d5Ef68a48740b6f8849cc2e6",
+        "fee": 3000
     },
     {
-        "name": "Uniswap_wstETH_0.01%",
-        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "name": "Aerodrome_AERO_WETH_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 100,
-        "protocol": "v3"
-    },
-    {
-        "name": "Aerodrome_DEGEN_USDC_V2",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x82321f3BEB69f503380D6B233857d5C43562e2D0",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0x637ad8d2611d3efE2ef41fdBb40b9F21AbAF9585",
-        "fee": 100,
-        "protocol": "v2"
+        "protocol": "v2",
+        "quoter": "0x82321f3BEB69f503380D6B233857d5C43562e2D0",
+        "fee": 3000
     },
     {
-        "name": "Uniswap_DEGEN_USDC_0.3%",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
-        "protocol": "v3"
-    },
-    {
-        "name": "Aerodrome_BRETT_USDC_V2",
-        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "name": "Aerodrome_AERO_cbBTC_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+        "pool": "0xdFe5F275020def30993f042174Fc2D335678b626",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0xFbB7df8B446F6d216702C0C3898Fb681a21186D3",
-        "fee": 3000,
-        "protocol": "v2"
+        "protocol": "v2",
+        "quoter": "0xdFe5F275020def30993f042174Fc2D335678b626",
+        "fee": 3000
     },
     {
-        "name": "Uniswap_BRETT_USDC_1%",
+        "name": "Aerodrome_AERO_wstETH_V2",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x565aecF84b5d30a6E79a5CEf3f0dA0Fc4280dEBC",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x565aecF84b5d30a6E79a5CEf3f0dA0Fc4280dEBC",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_BRETT_AERO_V2",
         "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
-        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000,
-        "protocol": "v3"
+        "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "pool": "0x43BBb129b56A998732767725A183b7a566843dBA",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x43BBb129b56A998732767725A183b7a566843dBA",
+        "fee": 3000
     },
     {
-        "name": "Uniswap_USDC_USDbC_0.05%",
+        "name": "Aerodrome_BRETT_WETH_V2",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x4e829F8A5213c42535AB84AA40BD4aDCCE9cBa02",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x4e829F8A5213c42535AB84AA40BD4aDCCE9cBa02",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_DEGEN_WETH_V2",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x2C4909355b0C036840819484c3A882A95659aBf3",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x2C4909355b0C036840819484c3A882A95659aBf3",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_DEGEN_WETH_V2",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xaFB62448929664Bfccb0aAe22f232520e765bA88",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xaFB62448929664Bfccb0aAe22f232520e765bA88",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_NOCK_USDC_V2",
+        "token_a": "0x9B5E262cF9bb04869ab40b19AF91D2dc85761722",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x85f1Aa3a70fEdd1C52705c15BAEd143e675CD626",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x85f1Aa3a70fEdd1C52705c15BAEd143e675CD626",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_USDC_USDbC_V2",
         "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 500,
-        "protocol": "v3"
-    },
-    {
-        "name": "Uniswap_DEGEN_WETH_0.3%",
-        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 3000,
-        "protocol": "v3"
-    },
-    {
-        "name": "Uniswap_BRETT_WETH_1%",
-        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
-        "token_b": "0x4200000000000000000000000000000000000006",
-        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-        "fee": 10000,
-        "protocol": "v3"
-    },
-    {
-        "name": "Aerodrome_WETH_USDbC_V2",
-        "token_a": "0x4200000000000000000000000000000000000006",
-        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "quoter": "0xB4885Bc63399BF5518b994c1d0C153334Ee579D0",
-        "fee": 500,
-        "protocol": "v2"
-    },
-    {
-        "name": "Aerodrome_USDC_USDbC_CL_0.01",
-        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
         "pool": "0x98c7A2338336d2d354663246F64676009c7bDa97",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 1,
-        "pool_fee": 500,
-        "protocol": "cl"
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x98c7A2338336d2d354663246F64676009c7bDa97",
+        "fee": 3000
     },
     {
-        "name": "Aerodrome_cbETH_WETH_CL_0.01%",
-        "token_a": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
-        "token_b": "0x4200000000000000000000000000000000000006",
+        "name": "Aerodrome_USDC_USDbC_V2",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x27a8Afa3Bd49406e48a074350fB7b2020c43B2bD",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x27a8Afa3Bd49406e48a074350fB7b2020c43B2bD",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_WETH_USDC_V2",
+        "token_a": "0x4200000000000000000000000000000000000006",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xb2cc224c1c9feE385f8ad6a55b4d94E92359DC59",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_WETH_USDC_V2",
+        "token_a": "0x4200000000000000000000000000000000000006",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xdbc6998296caA1652A810dc8D3BaF4A8294330f1",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xdbc6998296caA1652A810dc8D3BaF4A8294330f1",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_YFI_wstETH_V2",
+        "token_a": "0x9EaF8C1E34F05a589EDa6BAfdF391Cf6Ad3CB239",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x1524a14C55f097bb54F0b24383f3ae3e3743804A",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x1524a14C55f097bb54F0b24383f3ae3e3743804A",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_cbETH_WETH_V2",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x4200000000000000000000000000000000000006",
         "pool": "0x47cA96Ea59C13F72745928887f84C9F52C3D7348",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 1,
-        "pool_fee": 3000,
-        "protocol": "cl"
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x47cA96Ea59C13F72745928887f84C9F52C3D7348",
+        "fee": 3000
     },
     {
-        "name": "Aerodrome_ezETH_WETH_CL_0.01%",
-        "token_a": "0x2416092f143378750bb29b79ed961ab195cceea5",
+        "name": "Aerodrome_cbETH_WETH_V2",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
         "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x44Ecc644449fC3a9858d2007CaA8CFAa4C561f91",
         "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
-        "pool": "0xDC7EAd706795eDa3FEDa08Ad519d9452BAdF2C0d",
-        "quoter": "0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0",
-        "tick_spacing": 1,
-        "pool_fee": 3000,
-        "protocol": "cl"
+        "protocol": "v2",
+        "quoter": "0x44Ecc644449fC3a9858d2007CaA8CFAa4C561f91",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_cbETH_WETH_V2",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x9E8bfEB5c73F3f897BebdB49CC4161FecE0B0c55",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x9E8bfEB5c73F3f897BebdB49CC4161FecE0B0c55",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_fBOMB_wstETH_V2",
+        "token_a": "0x74ccbe53F77b08632ce0CB91D3A545bF6B8E0979",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0xBd1F3d188de7eE07B1b323C0D26D6720CAfB8780",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xBd1F3d188de7eE07B1b323C0D26D6720CAfB8780",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_rETH_wstETH_V2",
+        "token_a": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x587aC2d1F465099811FdD0C2072B4Fd819092Ad5",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x587aC2d1F465099811FdD0C2072B4Fd819092Ad5",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_wrsETH_wstETH_V2",
+        "token_a": "0xEDfa23602D0EC14714057867A78d01e94176BEA0",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x14dcCDd311Ab827c42CCA448ba87B1ac1039e2A4",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x14dcCDd311Ab827c42CCA448ba87B1ac1039e2A4",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_wstETH_AERO_V2",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "pool": "0x82a0c1a0d4EF0c0cA3cFDA3AD1AA78309Cc6139b",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x82a0c1a0d4EF0c0cA3cFDA3AD1AA78309Cc6139b",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_wstETH_WETH_V2",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x861A2922bE165a5Bd41b1E482B49216b465e1B5F",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_wstETH_WETH_V2",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xA6385c73961dd9C58db2EF0c4EB98cE4B60651e8",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0xA6385c73961dd9C58db2EF0c4EB98cE4B60651e8",
+        "fee": 3000
+    },
+    {
+        "name": "Aerodrome_wstETH_WETH_V2",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x29BBb5F85F01702Ec85D217CEEb2d9657700cF04",
+        "router": "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
+        "protocol": "v2",
+        "quoter": "0x29BBb5F85F01702Ec85D217CEEb2d9657700cF04",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_ETH_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x0000000000000000000000000000000000000000",
+        "pool": "0x5dd190c0949646fe9702d439ccf32936134e7da9947af46f418ae285c1032719",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_USDC_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xE5B5f522E98B5a2baAe212d4dA66b865B781DB97",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_USDC_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xe268e533bf3b4df49b2951ce7b39345f814e7eb93415eda1d39a9c3a57662ec8",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_USDC_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x56a0cd87d81cc71184a4b2dd42964591bf351d0cfdded03f9bc75b7b559344ce",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_WETH_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x3d5D143381916280ff91407FeBEB52f2b60f33Cf",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_AERO_WETH_3000",
+        "token_a": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x0D5959a52E7004b601f0bE70618D01aC3cDce976",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_BECOMEUNGOVERNABLE_USDC_3000",
+        "token_a": "0x3Dab2f1E41674760F174FD6CC70fC3D8f681FB02",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0x4557601f5d9a004f3fcf4dbced22b7044ea42fe38ab8bafc1107fcfd07d70cef",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_BRETT_ETH_3000",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x0000000000000000000000000000000000000000",
+        "pool": "0x27402edf3c6a6d6b5a279dfc7a2c8cbacebbfdfc3559f7c03d6971b09126a9f3",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_BRETT_USDC_3000",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xBF0A0C12E7C0610002F6Aa6E609755EDe42D6A4d",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_BRETT_WETH_3000",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xBA3F945812a83471d709BCe9C3CA699A19FB46f7",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_BRETT_WETH_3000",
+        "token_a": "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x76Bf0abD20f1e0155Ce40A62615a90A709a6C3D8",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_DEGEN_ETH_3000",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x0000000000000000000000000000000000000000",
+        "pool": "0xee381526b93d418077a9d1b9c9b495a3d135410af9a58bc2a5f512fb7b61cbf7",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_DEGEN_WETH_3000",
+        "token_a": "0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xc9034c3E7F58003E6ae0C8438e7c8f4598d5ACAA",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_USDC_USDbC_3000",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x867dbb1b6417abcb3696d5a5d9cc38cbf9f0f6d17355515fe1c8303e791832c4",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_USDC_USDbC_3000",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0xa0ab20a64f46b5676fe1542cb87b454e5104007689e0eef4212aa0cbe34933a1",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_USDC_USDbC_3000",
+        "token_a": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "token_b": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
+        "pool": "0x06959273E9A65433De71F5A452D529544E07dDD0",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_WETH_USDC_3000",
+        "token_a": "0x4200000000000000000000000000000000000006",
+        "token_b": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "pool": "0xb4CB800910B228ED3d0834cF79D697127BBB00e5",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_cbETH_ETH_3000",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x0000000000000000000000000000000000000000",
+        "pool": "0x99c7cec25ed9a7c6a9d2a2f065750e5e5bfe84c2ad06010e77a5c448ef67e0cb",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_cbETH_ETH_3000",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x0000000000000000000000000000000000000000",
+        "pool": "0x076a29b387dda06ce850805147fb1817df8680a7985de8a06ba191a643adde36",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_cbETH_WETH_3000",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x10648BA41B8565907Cfa1496765fA4D95390aa0d",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_cbETH_WETH_3000",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0xA9DaFa443a02FBc907Cb0093276B3E6F4ef02A46",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_cbETH_wstETH_3000",
+        "token_a": "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22",
+        "token_b": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "pool": "0x7c92c51b962263dE6449E11B59415C058980F455",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_wstETH_WETH_3000",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0x4200000000000000000000000000000000000006",
+        "pool": "0x20E068D76f9E90b90604500B84c7e19dCB923e7e",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
+    },
+    {
+        "name": "Uniswap_wstETH_rETH_3000",
+        "token_a": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "token_b": "0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c",
+        "pool": "0xf2ac25a530b3e56b8bf8cec5fa8702c79efe5b889616dd0479d1a05b22e28991",
+        "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+        "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+        "protocol": "v3",
+        "fee": 3000
     }
 ]
