@@ -7396,3 +7396,1299 @@
   Gross: 3924 | Net: 2618 WEI
   Metadata: Block: 40003406 | Token: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 (Dec: 6) | GasMode: exact | GasCostRaw: 1306 | GrossBps: 0 | NetBps: 0
 
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:54] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004436 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:46:56] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004437 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:46:59] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004438 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:02] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004439 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:04] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004440 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_1238
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_1238
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023887 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023887 -> 0.050009291850270065 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 9291850270065 | Net: 9291850270065 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_1238
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047774 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047774 -> 0.100018277705445872 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 18277705445872 | Net: 18277705445872 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_1238
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238872 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238872 -> 0.500089647986559354 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 89647986559354 | Net: 89647986559354 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_1238
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477740 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477740 -> 1.000140299079447556 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 140299079447556 | Net: 140299079447556 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:07] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955462 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955462 -> 2.000122528582515622 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 122528582515622 | Net: 122528582515622 WEI
+  Metadata: Block: 40004441 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_1238
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_1238
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:12] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004443 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_1238
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_1238
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:14] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004444 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_1238
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_1238
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477767 -> 1.000196989811358110 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 196989811358110 | Net: 196989811358110 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:17] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955515 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955515 -> 2.000233796773397651 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 233796773397651 | Net: 233796773397651 WEI
+  Metadata: Block: 40004445 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_1238
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:20] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_1238
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004446 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_1238
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_1238
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:22] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004447 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_1238
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_1238
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_1238
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023888 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023888 -> 0.050011391751124393 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 11391751124393 | Net: 11391751124393 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_1238
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047777 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047777 -> 0.100024577369460899 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 24577369460899 | Net: 24577369460899 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_1238
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238885 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238885 -> 0.500116945194336434 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 116945194336434 | Net: 116945194336434 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 2 | NetBps: 2
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 1.000000000000000000) ---
+  Step 1: 1.000000000000000000 -> 0.477766 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.477766 -> 1.000194890154627695 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 194890154627695 | Net: 194890154627695 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:25] --- Opportunity (Size: 2.000000000000000000) ---
+  Step 1: 2.000000000000000000 -> 0.955514 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.955514 -> 2.000231697373583711 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 231697373583711 | Net: 231697373583711 WEI
+  Metadata: Block: 40004448 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 1 | NetBps: 1
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:28] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004449 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:30] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004450 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:33] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004451 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:35] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004452 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:38] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004453 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:41] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004454 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:43] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004455 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:46] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004456 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:48] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004457 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:51] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004458 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:54] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004459 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:56] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004460 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:47:59] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004461 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:01] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004462 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:04] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004463 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_1238
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_1238
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_1238
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.050000000000000000) ---
+  Step 1: 0.050000000000000000 -> 0.023883 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.023883 -> 0.050000892246847356 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 892246847356 | Net: 892246847356 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.100000000000000000) ---
+  Step 1: 0.100000000000000000 -> 0.047767 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.047767 -> 0.100003578489391925 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 3578489391925 | Net: 3578489391925 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
+[2025-12-27 03:48:06] --- Opportunity (Size: 0.500000000000000000) ---
+  Step 1: 0.500000000000000000 -> 0.238837 via Aerodrome_AERO_USDC_CL_58a8
+  Step 2: 0.238837 -> 0.500016155503629436 via Uniswap_AERO_USDC_3000_DB97
+  Gross: 16155503629436 | Net: 16155503629436 WEI
+  Metadata: Block: 40004464 | Token: 0x940181a94a35a4569e4529a3cdfb74e38fd98631 (Dec: 18) | GasMode: none | GasCostRaw: 0 | GrossBps: 0 | NetBps: 0
+
