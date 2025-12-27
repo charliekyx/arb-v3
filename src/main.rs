@@ -61,7 +61,7 @@ struct PoolConfig {
     pool_fee: u32,
     token_a: Address,
     token_b: Address,
-    protocol: u8, // 0=V3, 1=V2, 2=CL
+    protocol: u8, // 0=Uniswap V3 , 1=Uniswap V2, 2=CL(Aerodrome Concentrated Liquidity)
 }
 
 // --- Logging Structs ---
@@ -94,12 +94,15 @@ struct OpportunityLog {
 }
 // --- ABI Definitions ---
 abigen!(
+    // 必须调用 Uniswap 官方的 QuoterV2 合约的 quoteExactInputSingle 函数。
+    // 因为 V3 的数学逻辑太复杂（涉及跨越多个 Tick, 很难在本地完美模拟。)
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(QuoteParams params) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)
     ]"#;
 
+    // 使用 Aerodrome 专门的 CLQuoter 合约。虽然原理和 V3 一样，但合约接口（ABI）略有不同（例如返回值的结构），所以专门写了 IAerodromeCLQuoter 来适配
     IAerodromeCLQuoter,
     r#"[
         struct CLQuoteParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }
@@ -115,12 +118,18 @@ abigen!(
         function token0() external view returns (address)
     ]"#;
 
-    IAerodromePair,
+    // Uniswap V2 是行业标准。绝大多数 V2 类 DEX（如 BaseSwap, SushiSwap, AlienBase）都完全复制了 Uniswap V2 的接口。
+    // Aerodrome (以及它的前身 Velodrome/Solidly) 的 Pair 合约里额外包含了一个 getAmountOut 函数。
+    // 在 Aerodrome 中称为 Basic/Volatile 和 Stable 池
+    // 目前配置文件里，所有 Aerodrome 的池子都标记为 "protocol": "cl"
+    // 支持：Aerodrome 的 Basic (Volatile) 池子。因为它们使用的是标准的 $x \times y = k$ 公式，和你代码里的本地计算逻辑兼容。
+    // 注意！！ 不支持：Aerodrome 的 Stable 池子（如 USDC/USDbC Basic）。因为稳定币池使用的是 $x^3y + y^3x = k$ 的混合曲线公式，你目前的本地计算函数算出来的价格会是错的。
+    // 标准的 Uniswap V2 Pair 合约里没有 getAmountOut（Uniswap V2 的询价通常是在 Router 合约里算的，或者链下算）
+    IUniswapV2Pair,
     r#"[
         function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast)
         function token0() external view returns (address)
         function token1() external view returns (address)
-        function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256 amountOut)
     ]"#
 );
 
@@ -527,7 +536,7 @@ async fn validate_v2_pool(
     pool: &PoolConfig,
 ) -> bool {
     if let Some(pair_addr) = pool.quoter {
-        let pair = IAerodromePair::new(pair_addr, client.clone());
+        let pair = IUniswapV2Pair::new(pair_addr, client.clone());
 
         // 最终方案：只要 getReserves 能调通，说明它就是个 V2 池，直接放行
         // 不再测试 getAmountOut，因为本金太小或太大都可能导致它 revert
@@ -604,7 +613,7 @@ async fn get_amount_out(
         ));
     }
     if pool.protocol == 1 {
-        let pair = IAerodromePair::new(pool.quoter.unwrap(), client);
+        let pair = IUniswapV2Pair::new(pool.quoter.unwrap(), client);
         let (r0, r1, _) = pair
             .get_reserves()
             .call()
@@ -678,7 +687,7 @@ struct ArbPath {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    info!("🚀 System Starting: Base Bot V5.8 (File Logging Restored)");
+    info!("System Starting...");
 
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
@@ -701,7 +710,7 @@ async fn main() -> Result<()> {
 
     let mut pools = Vec::new();
 
-    info!("🔍 Validating pools before startup...");
+    info!("Validating pools before startup...");
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
         let token_b = Address::from_str(&cfg.token_b)?;
@@ -718,7 +727,7 @@ async fn main() -> Result<()> {
         };
 
         if proto_code == 2 && quoter_addr == Some(uniswap_quoter_addr) {
-            warn!("⚠️ Skipping [{}]: CL pool using Uniswap Quoter.", cfg.name);
+            warn!("Skipping [{}]: CL pool using Uniswap Quoter.", cfg.name);
             continue;
         }
 
@@ -753,10 +762,7 @@ async fn main() -> Result<()> {
         };
 
         if !is_valid {
-            warn!(
-                "❌ Removing invalid pool [{}]: Validation failed.",
-                cfg.name
-            );
+            warn!("Removing invalid pool [{}]: Validation failed.", cfg.name);
             continue;
         }
 
@@ -777,10 +783,10 @@ async fn main() -> Result<()> {
             }
         }
     }
-    info!("✅ Active Pools: {}", pools.len());
+    info!("Active Pools: {}", pools.len());
 
     // 1. "Big Cleanup": Remove pools that fail a tiny quote
-    info!("🧹 Starting Pre-flight Cleanup (Removing dead pools)...");
+    info!("Starting Pre-flight Cleanup (Removing dead pools)...");
     let mut clean_pools = Vec::new();
 
     for pool in pools {
@@ -810,11 +816,11 @@ async fn main() -> Result<()> {
         {
             clean_pools.push(pool);
         } else {
-            warn!("🗑️ Removing dead pool [{}]: Quote failed", pool.name);
+            warn!("Removing dead pool [{}]: Quote failed", pool.name);
         }
     }
     pools = clean_pools;
-    info!("✨ Cleanup Complete. Valid Pools: {}", pools.len());
+    info!("Cleanup Complete. Valid Pools: {}", pools.len());
 
     // --- Static Probe for CL Quoter ---
     // AERO/USDC CL: 100 USDC -> AERO
@@ -822,7 +828,7 @@ async fn main() -> Result<()> {
     let usdc = Address::from_str(USDC_ADDR)?;
     let aero = Address::from_str("0x940181a94A35A4569E4529A3CDfB74e38FD98631")?;
     let q = Address::from_str("0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0")?;
-    info!("🔍 Starting Static Probe for CL Quoter...");
+    info!("Starting Static Probe for CL Quoter...");
     probe_quoter(
         provider.as_ref(),
         q,
@@ -865,7 +871,7 @@ async fn main() -> Result<()> {
         let block_timestamp = block.timestamp.as_u64();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
-            error!("💀 Daily Gas Limit Reached.");
+            error!("Daily Gas Limit Reached.");
             break;
         }
 
