@@ -1328,7 +1328,7 @@ async fn main() -> Result<()> {
                                 };
 
                                 let report = format!(
-                                    "🧊 WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
+                                    "WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
                                     route_name, format_token_amount(best_size, start_token), best_gross, best_net, gas_cost_display, net_bps
                                 );
                                 info!("{}", report);
