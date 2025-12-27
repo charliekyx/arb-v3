@@ -466,12 +466,12 @@ async fn validate_cl_pool(
     // 1) 先确认地址上有没有代码
     match client.provider().get_code(pool_addr, None).await {
         Ok(code) if code.0.is_empty() => {
-            warn!("❌ CL Pool {} has no code @ {:?}", pool.name, pool_addr);
+            warn!("CL Pool {} has no code @ {:?}", pool.name, pool_addr);
             return None;
         }
         Err(e) => {
             warn!(
-                "❌ CL Pool {} getCode failed @ {:?}: {:?}",
+                "CL Pool {} getCode failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
             return None;
@@ -488,7 +488,7 @@ async fn validate_cl_pool(
         Ok(v) => v,
         Err(e) => {
             warn!(
-                "❌ CL Pool {} tickSpacing() failed @ {:?}: {:?}",
+                "CL Pool {} tickSpacing() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
             return None;
@@ -498,7 +498,7 @@ async fn validate_cl_pool(
         Ok(v) => v,
         Err(e) => {
             warn!(
-                "❌ CL Pool {} fee() failed @ {:?}: {:?}",
+                "CL Pool {} fee() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
             return None;
@@ -508,7 +508,7 @@ async fn validate_cl_pool(
         Ok(v) => v,
         Err(e) => {
             warn!(
-                "❌ CL Pool {} liquidity() failed @ {:?}: {:?}",
+                "CL Pool {} liquidity() failed @ {:?}: {:?}",
                 pool.name, pool_addr, e
             );
             return None;
@@ -516,7 +516,7 @@ async fn validate_cl_pool(
     };
 
     info!(
-        "✅ CL Pool {} ok | ts={} fee={} liq={}",
+        "CL Pool {} ok | ts={} fee={} liq={}",
         pool.name, ts, fee, liq
     );
     Some((ts, fee))
@@ -529,12 +529,12 @@ async fn validate_v2_pool(
     if let Some(pair_addr) = pool.quoter {
         let pair = IAerodromePair::new(pair_addr, client.clone());
 
-        // 🔥 最终方案：只要 getReserves 能调通，说明它就是个 V2 池，直接放行
+        // 最终方案：只要 getReserves 能调通，说明它就是个 V2 池，直接放行
         // 不再测试 getAmountOut，因为本金太小或太大都可能导致它 revert
         match pair.get_reserves().call().await {
             Ok(_) => true,
             Err(e) => {
-                warn!("❌ Pool {} failed getReserves: {:?}", pool.name, e);
+                warn!("Pool {} failed getReserves: {:?}", pool.name, e);
                 false
             }
         }
@@ -556,7 +556,7 @@ fn send_email_alert(subject: &str, body: &str) {
     {
         Ok(e) => e,
         Err(e) => {
-            error!("❌ Email build failed: {:?}", e);
+            error!("Email build failed: {:?}", e);
             return;
         }
     };
@@ -569,7 +569,7 @@ fn send_email_alert(subject: &str, body: &str) {
 
     match mailer.send(&email) {
         Ok(_) => info!("📧 Email sent successfully!"),
-        Err(e) => error!("❌ Could not send email: {:?}", e),
+        Err(e) => error!("Could not send email: {:?}", e),
     }
 }
 
@@ -1027,7 +1027,7 @@ async fn main() -> Result<()> {
 
         // 核心逻辑：遍历 candidates 路径
         stream::iter(candidates)
-            .for_each_concurrent(10, |path| {
+            .for_each_concurrent(30, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
                 let failed_paths = failed_paths_ref.clone();
@@ -1068,7 +1068,7 @@ async fn main() -> Result<()> {
                     let can_price_gas =
                         start_token == weth || start_token == usdc || start_token == usdbc;
 
-                    // 🔥 局部改动：针对每条路径，跑遍所有资金档位
+                    // 局部改动：针对每条路径，跑遍所有资金档位
                     for size in test_sizes {
                         let mut current_amt = size;
                         let mut step_results = Vec::new();
@@ -1095,7 +1095,7 @@ async fn main() -> Result<()> {
                                 }
                                 Err(e) => {
                                     warn!(
-                                        "⚠️ Path failed at {} (Size: {}): {:?}",
+                                        "Path failed at {} (Size: {}): {:?}",
                                         path.pools[i].name,
                                         format_token_amount(size, start_token), // 修正日志显示
                                         e
@@ -1111,7 +1111,7 @@ async fn main() -> Result<()> {
                         }
 
                         if !failed {
-                            // 🔥 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
+                            // 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
                             // 这样 OkPaths 就会显示所有能跑通的路径数量，而不仅仅是盈利的
                             if !path_is_ok {
                                 ok_paths.fetch_add(1, Ordering::Relaxed);
@@ -1200,9 +1200,9 @@ async fn main() -> Result<()> {
 
                             // 3. 统一计价：用 Net(BPS) 判定盈利
                             let net_is_profitable = if start_token == usdc || start_token == usdbc {
-                                net > I256::from(1000) // 盈利超过 0.001 USDC
+                                net > I256::from(200_000) // 盈利超过 0.2 USDC
                             } else if start_token == weth {
-                                net > I256::from(1_000_000_000_000i128) // 盈利超过 0.000001 ETH
+                                net > I256::from(100_000_000_000_000i128) // 盈利超过 0.0001 ETH
                             } else {
                                 gross > I256::zero() // 其他币种暂时看毛利
                             };
@@ -1269,7 +1269,7 @@ async fn main() -> Result<()> {
 
                                 if count >= 2 {
                                     let subject = format!(
-                                        "🚀 Arbitrage Opportunity (Block {})",
+                                        "Arbitrage Opportunity (Block {})",
                                         block_number
                                     );
                                     let body = report.clone();
