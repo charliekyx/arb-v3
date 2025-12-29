@@ -677,37 +677,80 @@ async fn get_amount_out(
     }
 }
 
-// 获取 Token 相对于 WETH 的价格
+
+// 修改后的辅助函数：支持 WETH 和 USDC 双重锚点定价
 async fn get_price_in_weth(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     token: Address,
     weth: Address,
+    usdc: Address,
+    usdbc: Address,
     all_pools: &[PoolConfig],
+    eth_price_in_usdc: U256, // [新增参数] 当前 ETH 的 USDC 价格
 ) -> U256 {
-    // 如果本身就是 WETH，价格是 1.0 (1e18)
+    // 1. 如果本身是 WETH
     if token == weth {
         return parse_ether("1").unwrap();
     }
 
-    // 1. 在所有池子中，寻找一个可以直接交易 Token -> WETH 的池子
-    // 优先找 V3/CL 池子因为报价更准，但也接受 V2
-    let direct_pool = all_pools.iter().find(|p| {
+    // 2. 如果本身是 USDC 或 USDbC
+    if (token == usdc || token == usdbc) && !eth_price_in_usdc.is_zero() {
+        // 1 USDC = 1e18 / eth_price_in_usdc (ETH)
+        // 例如 ETH=3000 USDC. 1 USDC = 0.000333 ETH
+        // 计算: (1 * 1e18 * 1e6) / (eth_price_usdc) ? 
+        // 简化: 1 ETH = eth_price_usdc. 我们要返回 1 Unit Token (1e6) 的 ETH 价值
+        // Value = (1 Unit * 1e18) / (Price_Of_1_ETH_In_Small_Units)
+        // 更简单的推导：
+        // 1 ETH = P (USDC raw units, e.g. 3000 * 10^6)
+        // 1 USDC raw unit = 1e18 / P
+        // 1 Unit Token (USDC) = 1e6 raw units.
+        // Value = 1e6 * (1e18 / P) = 1e24 / P
+        // 这里的 eth_price_in_usdc 是 1 ETH 能换多少 USDC (例如 3300 * 10^6)
+        return U256::from(10).pow(24.into()) / eth_price_in_usdc;
+    }
+
+    let decimals_token = decimals(token);
+    let one_unit = U256::from(10).pow(decimals_token.into());
+
+    // 3. 策略 A: 寻找 Token -> WETH 直接交易对
+    let weth_pair = all_pools.iter().find(|p| {
         (p.token_a == token && p.token_b == weth) || (p.token_a == weth && p.token_b == token)
     });
 
-    if let Some(pool) = direct_pool {
-        // 询价 1 个单位的 Token
-        let decimals = decimals(token);
-        let one_unit = U256::from(10).pow(decimals.into());
-
-        if let Ok(price_wei) = get_amount_out(client, pool, token, weth, one_unit).await {
+    if let Some(pool) = weth_pair {
+        if let Ok(price_wei) = get_amount_out(client.clone(), pool, token, weth, one_unit).await {
             return price_wei;
         }
     }
 
-    // 如果找不到直接配对，返回 0，视为无法计价
+    // 4. 策略 B: 寻找 Token -> USDC/USDbC 交易对 (备选)
+    // 只有当我们知道 ETH 的价格时才执行此策略
+    if !eth_price_in_usdc.is_zero() {
+        let usdc_pair = all_pools.iter().find(|p| {
+            let other = if p.token_a == token { p.token_b } else { p.token_a };
+            (p.token_a == token || p.token_b == token) && (other == usdc || other == usdbc)
+        });
+
+        if let Some(pool) = usdc_pair {
+            // 询价：1 Token -> ? USDC
+            let target_stable = if pool.token_a == usdc || pool.token_b == usdc { usdc } else { usdbc };
+            if let Ok(price_usdc) = get_amount_out(client, pool, token, target_stable, one_unit).await {
+                // 换算逻辑：
+                // 已知: Token价值 = price_usdc (单位: USDC Wei)
+                // 已知: 1 ETH = eth_price_in_usdc (单位: USDC Wei)
+                // 求: Token价值 (单位: ETH Wei)
+                // 公式: Token_ETH = (price_usdc * 1e18) / eth_price_in_usdc
+                // 注意精度溢出保护，先乘后除
+                let price_in_eth = (price_usdc * U256::from(10).pow(18.into())) / eth_price_in_usdc;
+                return price_in_eth;
+            }
+        }
+    }
+
+    // 实在找不到定价，放弃
     U256::zero()
 }
+
 
 #[derive(Clone)]
 struct ArbPath {
@@ -1180,7 +1223,17 @@ async fn main() -> Result<()> {
                             // [关键修改]：计算真实的 Gas 成本 (转换为当前 Token 单位)
                             // 无论 start_token 是什么，我们都尝试通过 WETH 价格来换算真实的 Gas 负担
                             let weth_addr = Address::from_str(WETH_ADDR).unwrap();
-                            let price_in_weth = get_price_in_weth(client.clone(), start_token, weth_addr, &all_pools).await;
+
+                            let price_in_weth = get_price_in_weth(
+                                client.clone(), 
+                                start_token, 
+                                weth, 
+                                usdc, 
+                                usdbc, // 确保 main 开头定义了 usdbc
+                                &all_pools,
+                                eth_price_usdc // 这个变量你在 loop 开头已经计算了
+                            ).await;
+
                             
                             // L1 Data Fee Buffer (Base Chain Specific): 0.00005 ETH
                             let l1_buffer = parse_ether("0.00005").unwrap();
@@ -1251,7 +1304,7 @@ async fn main() -> Result<()> {
                                 steps: log_steps,
                             };
 
-                            // 保留你的 JSONL 写入逻辑（被注释掉的）
+                            // JSONL 写入逻辑
                             // if let Err(e) = append_jsonl_log(&log_entry) {
                             //     error!("Failed to write to trades.jsonl: {:?}", e);
                             // }
@@ -1369,7 +1422,17 @@ async fn main() -> Result<()> {
                         // Only generate WATCH logs for tokens where we can accurately price gas.
                         // [修改] 现在我们用 get_price_in_weth，大部分代币都可以计价了
                         let weth_addr = Address::from_str(WETH_ADDR).unwrap();
-                        let price_in_weth = get_price_in_weth(client.clone(), start_token, weth_addr, &all_pools).await;
+
+                        let price_in_weth = get_price_in_weth(
+                            client.clone(), 
+                            start_token, 
+                            weth, 
+                            usdc, 
+                            usdbc, // 确保 main 开头定义了 usdbc
+                            &all_pools,
+                            eth_price_usdc // 这个变量你在 loop 开头已经计算了
+                        ).await;
+
                         
                         if !price_in_weth.is_zero() || start_token == usdc || start_token == usdbc {
                             let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
