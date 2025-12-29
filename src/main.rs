@@ -677,12 +677,45 @@ async fn get_amount_out(
     }
 }
 
+// 获取 Token 相对于 WETH 的价格
+async fn get_price_in_weth(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    token: Address,
+    weth: Address,
+    all_pools: &[PoolConfig],
+) -> U256 {
+    // 如果本身就是 WETH，价格是 1.0 (1e18)
+    if token == weth {
+        return parse_ether("1").unwrap();
+    }
+
+    // 1. 在所有池子中，寻找一个可以直接交易 Token -> WETH 的池子
+    // 优先找 V3/CL 池子因为报价更准，但也接受 V2
+    let direct_pool = all_pools.iter().find(|p| {
+        (p.token_a == token && p.token_b == weth) || (p.token_a == weth && p.token_b == token)
+    });
+
+    if let Some(pool) = direct_pool {
+        // 询价 1 个单位的 Token
+        let decimals = decimals(token);
+        let one_unit = U256::from(10).pow(decimals.into());
+
+        if let Ok(price_wei) = get_amount_out(client, pool, token, weth, one_unit).await {
+            return price_wei;
+        }
+    }
+
+    // 如果找不到直接配对，返回 0，视为无法计价
+    U256::zero()
+}
+
 #[derive(Clone)]
 struct ArbPath {
     pools: Vec<PoolConfig>,
     tokens: Vec<Address>,
     is_triangle: bool,
 }
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -821,6 +854,9 @@ async fn main() -> Result<()> {
     }
     pools = clean_pools;
     info!("Cleanup Complete. Valid Pools: {}", pools.len());
+
+    // [新增] 将所有池子包装成 Arc，以便在 loop 内部用于定价查询
+    let all_pools_arc = Arc::new(pools.clone());
 
     // --- Static Probe for CL Quoter ---
     // AERO/USDC CL: 100 USDC -> AERO
@@ -1030,6 +1066,8 @@ async fn main() -> Result<()> {
         let failed_paths_ref = failed_paths.clone();
         let pool_failures_ref = pool_failures.clone();
         let profitable_history_ref = profitable_history.clone();
+        // [修改] 传递池子列表
+        let all_pools_ref = all_pools_arc.clone();
 
         // 核心逻辑：遍历 candidates 路径
         stream::iter(candidates)
@@ -1039,6 +1077,10 @@ async fn main() -> Result<()> {
                 let failed_paths = failed_paths_ref.clone();
                 let pool_failures = pool_failures_ref.clone();
                 let profitable_history = profitable_history_ref.clone();
+                let client = client_ref.clone();
+                // [修改] 捕获 all_pools
+                let all_pools = all_pools_ref.clone();
+
                 async move {
                     let mut path_is_ok = false;
                     let mut path_is_profitable = false;
@@ -1069,9 +1111,10 @@ async fn main() -> Result<()> {
                             parse_amount("5", start_token),
                         ]
                     };
-
-                    // 标记是否能计算 Gas (防止非主流代币出现假盈利)
-                    let can_price_gas =
+                    
+                    // [修改] 标记是否能精确计算Gas。现在我们用更高级的逻辑覆盖它，
+                    // 但保留此变量用于日志显示的兼容性 (GasMode: none/exact)
+                    let can_price_gas_legacy =
                         start_token == weth || start_token == usdc || start_token == usdbc;
 
                     // 局部改动：针对每条路径，跑遍所有资金档位
@@ -1083,7 +1126,7 @@ async fn main() -> Result<()> {
                         // 逐跳获取报价
                         for i in 0..path.pools.len() {
                             match get_amount_out(
-                                client_ref.clone(),
+                                client.clone(), // fixed clone inside loop
                                 &path.pools[i],
                                 path.tokens[i],
                                 path.tokens[i + 1],
@@ -1103,7 +1146,7 @@ async fn main() -> Result<()> {
                                     warn!(
                                         "Path failed at {} (Size: {}): {:?}",
                                         path.pools[i].name,
-                                        format_token_amount(size, start_token), // 修正日志显示
+                                        format_token_amount(size, start_token),
                                         e
                                     );
                                     pool_failures
@@ -1118,7 +1161,6 @@ async fn main() -> Result<()> {
 
                         if !failed {
                             // 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
-                            // 这样 OkPaths 就会显示所有能跑通的路径数量，而不仅仅是盈利的
                             if !path_is_ok {
                                 ok_paths.fetch_add(1, Ordering::Relaxed);
                                 path_is_ok = true;
@@ -1134,19 +1176,34 @@ async fn main() -> Result<()> {
                             // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
                             let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
                             let gas_cost_wei = U256::from(gas_used) * gas_price;
+                            
+                            // [关键修改]：计算真实的 Gas 成本 (转换为当前 Token 单位)
+                            // 无论 start_token 是什么，我们都尝试通过 WETH 价格来换算真实的 Gas 负担
+                            let weth_addr = Address::from_str(WETH_ADDR).unwrap();
+                            let price_in_weth = get_price_in_weth(client.clone(), start_token, weth_addr, &all_pools).await;
+                            
+                            // L1 Data Fee Buffer (Base Chain Specific): 0.00005 ETH
+                            let l1_buffer = parse_ether("0.00005").unwrap();
+                            let total_gas_eth = gas_cost_wei + l1_buffer;
 
-                            // 2. 统一计价 Net (USDC or Base Token)
                             let gas_cost = if start_token == weth {
-                                I256::from(gas_cost_wei.as_u128())
+                                I256::from(total_gas_eth.as_u128())
                             } else if (start_token == usdc || start_token == usdbc)
                                 && !eth_price_usdc.is_zero()
                             {
                                 // Gas(Wei) -> USDC: (gas_wei * eth_price_usdc) / 1e18
                                 let gas_usdc =
-                                    (gas_cost_wei * eth_price_usdc) / U256::from(10).pow(18.into());
+                                    (total_gas_eth * eth_price_usdc) / U256::from(10).pow(18.into());
                                 I256::from(gas_usdc.as_u128())
+                            } else if !price_in_weth.is_zero() {
+                                // [新增分支] 通用代币 (如 AERO)
+                                // 逻辑：1 Token = price_in_weth (Wei)
+                                // GasCost(Token) = (GasCostETH * 10^Decimals) / price_in_weth
+                                let decimals = decimals(start_token);
+                                let gas_in_token = (total_gas_eth * U256::from(10).pow(decimals.into())) / price_in_weth;
+                                I256::from(gas_in_token.as_u128())
                             } else {
-                                // 其他币种暂时无法精确计价 Gas，设为 0 避免 Net 出现巨大负数误导
+                                // 确实无法定价，保持原状 (但后续过滤会拦截)
                                 I256::zero()
                             };
 
@@ -1190,28 +1247,42 @@ async fn main() -> Result<()> {
                                 gas_price_wei: gas_price.to_string(),
                                 gas_used_assumed: gas_used,
                                 gas_cost_priced_raw: gas_cost.to_string(),
-                                can_price_gas,
+                                can_price_gas: !price_in_weth.is_zero(), // 更新此状态
                                 steps: log_steps,
                             };
 
+                            // 保留你的 JSONL 写入逻辑（被注释掉的）
                             // if let Err(e) = append_jsonl_log(&log_entry) {
                             //     error!("Failed to write to trades.jsonl: {:?}", e);
                             // }
 
                             found_any = true;
-                            if gross > best_gross { // Note: We are tracking the best *gross* profit size
+                            if gross > best_gross {
                                 best_gross = gross;
                                 best_size = size;
                             }
 
                             // 3. 统一计价：用 Net(BPS) 判定盈利
-                            let net_is_profitable = if start_token == usdc || start_token == usdbc {
-                                net > I256::from(2_000_000) // 盈利超过 2 USDC
-                            } else if start_token == weth {
-                                net > I256::from(700_000_000_000_000i128) // 盈利超过 0.0007 ETH approx = 2USDC
-                            } else {
-                                gross > I256::zero() // 其他币种暂时看毛利
-                            };
+                            // [关键修改]：引入硬性 ETH 门槛
+                            let mut net_is_profitable = false;
+                            
+                            // 只有当我们知道价格时，才能准确判定是否盈利
+                            if !price_in_weth.is_zero() && net > I256::zero() {
+                                // 将净利润 (Token) 换算回 ETH
+                                let net_token_u256 = U256::from(net.as_u128());
+                                let decimals = decimals(start_token);
+                                // Profit(ETH) = (Profit(Token) * Price(WETH)) / 10^Decimals
+                                let net_eth = (net_token_u256 * price_in_weth) / U256::from(10).pow(decimals.into());
+                                
+                                // 硬性门槛：$2.00 (约 0.0006 ETH)
+                                let min_threshold = parse_ether("0.0006").unwrap();
+                                if net_eth > min_threshold {
+                                    net_is_profitable = true;
+                                }
+                            } else if start_token == usdc || start_token == usdbc {
+                                // 针对稳定币保留直接判断
+                                net_is_profitable = net > I256::from(2_000_000); // > 2 USDC
+                            }
 
                             if net_is_profitable {
                                 if !path_is_profitable {
@@ -1239,7 +1310,7 @@ async fn main() -> Result<()> {
                                     block_number,
                                     start_token,
                                     decimals(start_token),
-                                    if can_price_gas { "exact" } else { "none" },
+                                    if !price_in_weth.is_zero() { "exact" } else { "none" },
                                     gas_cost,
                                     gross_bps,
                                     net_bps
@@ -1296,18 +1367,25 @@ async fn main() -> Result<()> {
                     // It uses the best found gross profit to generate a single, accurate WATCH log.
                     if found_any {
                         // Only generate WATCH logs for tokens where we can accurately price gas.
-                        // This prevents printing misleading "Gas: 0" logs for other tokens.
-                        if can_price_gas {
+                        // [修改] 现在我们用 get_price_in_weth，大部分代币都可以计价了
+                        let weth_addr = Address::from_str(WETH_ADDR).unwrap();
+                        let price_in_weth = get_price_in_weth(client.clone(), start_token, weth_addr, &all_pools).await;
+                        
+                        if !price_in_weth.is_zero() || start_token == usdc || start_token == usdbc {
                             let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
                             let gas_cost_wei = U256::from(gas_used) * gas_price;
 
                             let gas_cost_display = if start_token == weth {
                                 I256::from(gas_cost_wei.as_u128())
-                            } else {
-                                // This branch is only for USDC/USDbC now
+                            } else if (start_token == usdc || start_token == usdbc) && !eth_price_usdc.is_zero() {
                                 let gas_usdc = (gas_cost_wei * eth_price_usdc)
                                     / U256::from(10).pow(18.into());
                                 I256::from(gas_usdc.as_u128())
+                            } else {
+                                // [修改] 使用通用计价逻辑计算显示的 Gas
+                                let decimals = decimals(start_token);
+                                let gas_in_token = (gas_cost_wei * U256::from(10).pow(decimals.into())) / price_in_weth;
+                                I256::from(gas_in_token.as_u128())
                             };
 
                             let best_net = best_gross - gas_cost_display;
@@ -1318,8 +1396,15 @@ async fn main() -> Result<()> {
                                 // WETH
                                 I256::from(-50_000_000_000_000i128) // -0.00005 ETH
                             };
+                            
+                            // 针对 AERO 等，我们也应该用一个相对阈值，这里简单处理，如果 price 存在，允许稍微亏损一点也显示观察日志
+                            let should_log_watch = if !price_in_weth.is_zero() {
+                                best_net > I256::zero() // 只要毛利能覆盖 Gas，就记录 Watch
+                            } else {
+                                best_net > near_threshold
+                            };
 
-                            if best_net > near_threshold {
+                            if should_log_watch {
                                 let net_bps: i128 = if best_size.as_u128() > 0 {
                                     (best_net.as_i128() * 10_000i128)
                                         / (best_size.as_u128() as i128)
