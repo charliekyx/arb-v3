@@ -1194,9 +1194,9 @@ async fn main() -> Result<()> {
                                 steps: log_steps,
                             };
 
-                            if let Err(e) = append_jsonl_log(&log_entry) {
-                                error!("Failed to write to trades.jsonl: {:?}", e);
-                            }
+                            // if let Err(e) = append_jsonl_log(&log_entry) {
+                            //     error!("Failed to write to trades.jsonl: {:?}", e);
+                            // }
 
                             found_any = true;
                             if gross > best_gross { // Note: We are tracking the best *gross* profit size
