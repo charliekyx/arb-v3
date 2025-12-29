@@ -1206,9 +1206,9 @@ async fn main() -> Result<()> {
 
                             // 3. 统一计价：用 Net(BPS) 判定盈利
                             let net_is_profitable = if start_token == usdc || start_token == usdbc {
-                                net > I256::from(200_000) // 盈利超过 0.2 USDC
+                                net > I256::from(2_000_000) // 盈利超过 2 USDC
                             } else if start_token == weth {
-                                net > I256::from(100_000_000_000_000i128) // 盈利超过 0.0001 ETH
+                                net > I256::from(700_000_000_000_000i128) // 盈利超过 0.0007 ETH approx = 2USDC
                             } else {
                                 gross > I256::zero() // 其他币种暂时看毛利
                             };
