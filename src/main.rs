@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use cocoon::Cocoon;
 use dashmap::DashMap;
-use ethers::abi::{encode, Token};
+
 use ethers::{
     prelude::*,
     types::{Address, I256, U256},
@@ -24,6 +24,10 @@ use std::{
     time::Duration,
 };
 use tracing::{error, info, warn};
+
+// 引入 Execution 模块
+mod execution;
+use execution::execute_transaction;
 
 // --- Config Structs ---
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -182,7 +186,6 @@ impl SharedGasManager {
         *self.accumulated_loss.lock().unwrap()
     }
 
-    // 恢复：写入 Gas 状态到文件
     fn add_loss(&self, loss: u128) {
         let mut lock = self.accumulated_loss.lock().unwrap();
         *lock += loss;
@@ -209,7 +212,6 @@ fn append_jsonl_log(log_entry: &OpportunityLog) -> Result<()> {
     Ok(())
 }
 
-// 恢复：追加日志到本地文件
 fn append_log_to_file(msg: &str) {
     let file_path = "opportunities.txt";
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) {
@@ -256,7 +258,7 @@ fn token_symbol(token: Address) -> String {
         "ezETH".to_string()
     } else {
         format!("{:?}", token)
-    } // Fallback to address
+    }
 }
 
 fn decimals(token: Address) -> u32 {
@@ -311,159 +313,6 @@ fn sel4(sig: &str) -> [u8; 4] {
     [h[0], h[1], h[2], h[3]]
 }
 
-async fn probe_quoter(
-    provider: &Provider<Ipc>,
-    quoter: Address,
-    token_in: Address,
-    token_out: Address,
-    amount_in: U256,
-    tick_spacing: i32,
-    fee_u24: u32,
-) -> Result<()> {
-    // 常见候选：fee / tickSpacing，不同顺序，有的没有 sqrtPriceLimitX96
-    let candidates = vec![
-        "quoteExactInputSingle(address,address,uint24,uint256,uint160)",
-        "quoteExactInputSingle(address,address,int24,uint256,uint160)",
-        "quoteExactInputSingle(address,address,uint256,uint24,uint160)",
-        "quoteExactInputSingle(address,address,uint256,int24,uint160)",
-        "quoteExactInputSingle(address,address,uint24,uint256)",
-        "quoteExactInputSingle(address,address,int24,uint256)",
-    ];
-    for sig in candidates {
-        let selector = sel4(sig);
-        // 逐个 signature 手工拼 args（注意：encode 的 Token 列表必须和 sig 参数个数一致）
-        let args: Vec<Token> = match sig {
-            "quoteExactInputSingle(address,address,uint24,uint256,uint160)" => vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Uint(U256::from(fee_u24)),
-                Token::Uint(amount_in),
-                Token::Uint(U256::zero()),
-            ],
-            "quoteExactInputSingle(address,address,int24,uint256,uint160)" => vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Int(I256::from(tick_spacing).into_raw()),
-                Token::Uint(amount_in),
-                Token::Uint(U256::zero()),
-            ],
-            "quoteExactInputSingle(address,address,uint256,uint24,uint160)" => vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Uint(amount_in),
-                Token::Uint(U256::from(fee_u24)),
-                Token::Uint(U256::zero()),
-            ],
-            "quoteExactInputSingle(address,address,uint256,int24,uint160)" => vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Uint(amount_in),
-                Token::Int(I256::from(tick_spacing).into_raw()),
-                Token::Uint(U256::zero()),
-            ],
-            "quoteExactInputSingle(address,address,uint24,uint256)" => {
-                vec![
-                    Token::Address(token_in),
-                    Token::Address(token_out),
-                    Token::Uint(U256::from(fee_u24)),
-                    Token::Uint(amount_in),
-                ]
-            }
-            "quoteExactInputSingle(address,address,int24,uint256)" => {
-                vec![
-                    Token::Address(token_in),
-                    Token::Address(token_out),
-                    Token::Int(I256::from(tick_spacing).into_raw()),
-                    Token::Uint(amount_in),
-                ]
-            }
-            _ => unreachable!(),
-        };
-        let mut data = Vec::new();
-        data.extend_from_slice(&selector);
-        data.extend_from_slice(&encode(&args));
-        let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
-        match provider.call(&tx.into(), None).await {
-            Ok(ret) => {
-                info!(
-                    "PROBE OK {} sel=0x{} ret_len={}",
-                    sig,
-                    hex::encode(selector),
-                    ret.0.len()
-                );
-            }
-            Err(e) => {
-                // 这里把错误完整打出来（有时包含 revert data）
-                warn!(
-                    "PROBE ERR {} sel=0x{} err={:?}",
-                    sig,
-                    hex::encode(selector),
-                    e
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-async fn probe_quoter_tuple(
-    provider: &Provider<Ipc>,
-    quoter: Address,
-    token_in: Address,
-    token_out: Address,
-    amount_in: U256,
-    tick_spacing: i32,
-    fee_u24: u32,
-) -> Result<()> {
-    let candidates = vec![
-        (
-            "quoteExactInputSingle((address,address,uint256,uint24,uint160))",
-            vec![Token::Tuple(vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Uint(amount_in),
-                Token::Uint(U256::from(fee_u24)),
-                Token::Uint(U256::zero()),
-            ])],
-        ),
-        (
-            "quoteExactInputSingle((address,address,uint256,int24,uint160))",
-            vec![Token::Tuple(vec![
-                Token::Address(token_in),
-                Token::Address(token_out),
-                Token::Uint(amount_in),
-                Token::Int(I256::from(tick_spacing).into_raw()),
-                Token::Uint(U256::zero()),
-            ])],
-        ),
-    ];
-    for (sig, args) in candidates {
-        let selector = sel4(sig);
-        let mut data = Vec::new();
-        data.extend_from_slice(&selector);
-        data.extend_from_slice(&encode(&args));
-        let tx = TransactionRequest::new().to(quoter).data(Bytes::from(data));
-        match provider.call(&tx.into(), None).await {
-            Ok(ret) => {
-                info!(
-                    "PROBE OK {} sel=0x{} ret_len={}",
-                    sig,
-                    hex::encode(selector),
-                    ret.0.len()
-                );
-                info!("ret=0x{}", hex::encode(&ret.0));
-            }
-            Err(e) => warn!(
-                "PROBE ERR {} sel=0x{} err={:?}",
-                sig,
-                hex::encode(selector),
-                e
-            ),
-        }
-    }
-    Ok(())
-}
-
 async fn validate_cl_pool(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     pool: &PoolConfig,
@@ -472,7 +321,6 @@ async fn validate_cl_pool(
         return None;
     };
 
-    // 1) 先确认地址上有没有代码
     match client.provider().get_code(pool_addr, None).await {
         Ok(code) if code.0.is_empty() => {
             warn!("CL Pool {} has no code @ {:?}", pool.name, pool_addr);
@@ -488,10 +336,6 @@ async fn validate_cl_pool(
         _ => {}
     }
 
-    // 2) 调试 slot0 raw
-    // let _ = debug_slot0_raw(client.provider(), pool_addr).await;
-
-    // 3) 改用 tickSpacing/fee/liquidity 做验证
     let contract = ICLPool::new(pool_addr, client.clone());
     let ts = match contract.tick_spacing().call().await {
         Ok(v) => v,
@@ -537,9 +381,6 @@ async fn validate_v2_pool(
 ) -> bool {
     if let Some(pair_addr) = pool.quoter {
         let pair = IUniswapV2Pair::new(pair_addr, client.clone());
-
-        // 最终方案：只要 getReserves 能调通，说明它就是个 V2 池，直接放行
-        // 不再测试 getAmountOut，因为本金太小或太大都可能导致它 revert
         match pair.get_reserves().call().await {
             Ok(_) => true,
             Err(e) => {
@@ -631,7 +472,6 @@ async fn get_amount_out(
             (r1, r0)
         };
 
-        // BaseSwap usually 0.25% (25 bps), others 0.3% (30 bps)
         let fee_bps = if pool.name.to_lowercase().contains("baseswap") {
             25
         } else {
@@ -677,8 +517,6 @@ async fn get_amount_out(
     }
 }
 
-
-// 修改后的辅助函数：支持 WETH 和 USDC 双重锚点定价
 async fn get_price_in_weth(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     token: Address,
@@ -686,33 +524,21 @@ async fn get_price_in_weth(
     usdc: Address,
     usdbc: Address,
     all_pools: &[PoolConfig],
-    eth_price_in_usdc: U256, // [新增参数] 当前 ETH 的 USDC 价格
+    eth_price_in_usdc: U256,
 ) -> U256 {
-    // 1. 如果本身是 WETH
     if token == weth {
         return parse_ether("1").unwrap();
     }
 
-    // 2. 如果本身是 USDC 或 USDbC
     if (token == usdc || token == usdbc) && !eth_price_in_usdc.is_zero() {
-        // 1 USDC = 1e18 / eth_price_in_usdc (ETH)
-        // 例如 ETH=3000 USDC. 1 USDC = 0.000333 ETH
-        // 计算: (1 * 1e18 * 1e6) / (eth_price_usdc) ? 
-        // 简化: 1 ETH = eth_price_usdc. 我们要返回 1 Unit Token (1e6) 的 ETH 价值
-        // Value = (1 Unit * 1e18) / (Price_Of_1_ETH_In_Small_Units)
-        // 更简单的推导：
-        // 1 ETH = P (USDC raw units, e.g. 3000 * 10^6)
-        // 1 USDC raw unit = 1e18 / P
-        // 1 Unit Token (USDC) = 1e6 raw units.
-        // Value = 1e6 * (1e18 / P) = 1e24 / P
-        // 这里的 eth_price_in_usdc 是 1 ETH 能换多少 USDC (例如 3300 * 10^6)
+        // Value = 1e24 / eth_price_in_usdc
         return U256::from(10).pow(24.into()) / eth_price_in_usdc;
     }
 
     let decimals_token = decimals(token);
     let one_unit = U256::from(10).pow(decimals_token.into());
 
-    // 3. 策略 A: 寻找 Token -> WETH 直接交易对
+    // 策略 A: Token -> WETH
     let weth_pair = all_pools.iter().find(|p| {
         (p.token_a == token && p.token_b == weth) || (p.token_a == weth && p.token_b == token)
     });
@@ -723,34 +549,118 @@ async fn get_price_in_weth(
         }
     }
 
-    // 4. 策略 B: 寻找 Token -> USDC/USDbC 交易对 (备选)
-    // 只有当我们知道 ETH 的价格时才执行此策略
+    // 策略 B: Token -> USDC/USDbC -> WETH
     if !eth_price_in_usdc.is_zero() {
         let usdc_pair = all_pools.iter().find(|p| {
-            let other = if p.token_a == token { p.token_b } else { p.token_a };
+            let other = if p.token_a == token {
+                p.token_b
+            } else {
+                p.token_a
+            };
             (p.token_a == token || p.token_b == token) && (other == usdc || other == usdbc)
         });
 
         if let Some(pool) = usdc_pair {
-            // 询价：1 Token -> ? USDC
-            let target_stable = if pool.token_a == usdc || pool.token_b == usdc { usdc } else { usdbc };
-            if let Ok(price_usdc) = get_amount_out(client, pool, token, target_stable, one_unit).await {
-                // 换算逻辑：
-                // 已知: Token价值 = price_usdc (单位: USDC Wei)
-                // 已知: 1 ETH = eth_price_in_usdc (单位: USDC Wei)
-                // 求: Token价值 (单位: ETH Wei)
-                // 公式: Token_ETH = (price_usdc * 1e18) / eth_price_in_usdc
-                // 注意精度溢出保护，先乘后除
+            let target_stable = if pool.token_a == usdc || pool.token_b == usdc {
+                usdc
+            } else {
+                usdbc
+            };
+            if let Ok(price_usdc) =
+                get_amount_out(client, pool, token, target_stable, one_unit).await
+            {
+                // Token_ETH = (price_usdc * 1e18) / eth_price_in_usdc
                 let price_in_eth = (price_usdc * U256::from(10).pow(18.into())) / eth_price_in_usdc;
                 return price_in_eth;
             }
         }
     }
 
-    // 实在找不到定价，放弃
     U256::zero()
 }
 
+// 黄金分割搜索算法
+async fn optimize_amount_in(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    path: &ArbPath,
+    gas_cost_wei: I256,
+    start_token_decimals: u32,
+) -> Option<(U256, I256)> {
+    let one_unit = U256::from(10).pow(start_token_decimals.into());
+    let mut low = one_unit * 10;
+    let mut high = one_unit * 100_000;
+
+    let phi_num = 618;
+    let phi_den = 1000;
+    let iterations = 10;
+
+    // [修复点] 修改闭包结构
+    let calc_profit = |amt: U256| {
+        // 1. 在 async 块之外 clone 数据
+        let client = client.clone();
+        let pools = path.pools.clone();
+        let tokens = path.tokens.clone();
+
+        // 2. 返回拥有独立数据的 Future
+        async move {
+            let mut current = amt;
+            // 使用 clone 进来的 pools 和 tokens
+            for i in 0..pools.len() {
+                match get_amount_out(client.clone(), &pools[i], tokens[i], tokens[i + 1], current)
+                    .await
+                {
+                    Ok(out) => current = out,
+                    Err(_) => return I256::min_value(),
+                }
+            }
+
+            let gross = if current > amt {
+                I256::from((current - amt).as_u128())
+            } else {
+                I256::from(0) - I256::from((amt - current).as_u128())
+            };
+
+            gross - gas_cost_wei
+        }
+    };
+
+    let range = high - low;
+    let mut c = high - (range * phi_num / phi_den);
+    let mut d = low + (range * phi_num / phi_den);
+
+    let mut profit_c = calc_profit(c).await;
+    let mut profit_d = calc_profit(d).await;
+
+    for _ in 0..iterations {
+        if profit_c > profit_d {
+            high = d;
+            d = c;
+            profit_d = profit_c;
+            let range = high - low;
+            c = high - (range * phi_num / phi_den);
+            profit_c = calc_profit(c).await;
+        } else {
+            low = c;
+            c = d;
+            profit_c = profit_d;
+            let range = high - low;
+            d = low + (range * phi_num / phi_den);
+            profit_d = calc_profit(d).await;
+        }
+    }
+
+    let (best_amt, best_profit) = if profit_c > profit_d {
+        (c, profit_c)
+    } else {
+        (d, profit_d)
+    };
+
+    if best_profit > I256::zero() {
+        Some((best_amt, best_profit))
+    } else {
+        None
+    }
+}
 
 #[derive(Clone)]
 struct ArbPath {
@@ -758,7 +668,6 @@ struct ArbPath {
     tokens: Vec<Address>,
     is_triangle: bool,
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -771,7 +680,7 @@ async fn main() -> Result<()> {
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let pool_failures: Arc<DashMap<String, u32>> = Arc::new(DashMap::new());
-    let profitable_history: Arc<DashMap<String, (u64, u32)>> = Arc::new(DashMap::new());
+    let _profitable_history: Arc<DashMap<String, (u64, u32)>> = Arc::new(DashMap::new());
     let mut probed_quoters = std::collections::HashSet::new();
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
@@ -842,7 +751,6 @@ async fn main() -> Result<()> {
             continue;
         }
 
-        // Update config with real on-chain values for CL pools
         let mut final_config = p_config;
         if proto_code == 2 {
             final_config.tick_spacing = real_ts;
@@ -861,25 +769,21 @@ async fn main() -> Result<()> {
     }
     info!("Active Pools: {}", pools.len());
 
-    // 1. "Big Cleanup": Remove pools that fail a tiny quote
     info!("Starting Pre-flight Cleanup (Removing dead pools)...");
     let mut clean_pools = Vec::new();
 
     for pool in pools {
-        // For V2, we trust validate_v2_pool (getReserves check)
         if pool.protocol == 1 {
             clean_pools.push(pool);
             continue;
         }
 
-        // For V3/CL, probe with tiny amount
         let test_amount = if pool.token_a == usdc || pool.token_b == usdc {
             parse_units("0.1", 6).unwrap().into()
         } else {
             parse_units("0.0001", 18).unwrap().into()
         };
 
-        // Try swap token_a -> token_b
         if get_amount_out(
             client.clone(),
             &pool,
@@ -898,43 +802,12 @@ async fn main() -> Result<()> {
     pools = clean_pools;
     info!("Cleanup Complete. Valid Pools: {}", pools.len());
 
-    // [新增] 将所有池子包装成 Arc，以便在 loop 内部用于定价查询
     let all_pools_arc = Arc::new(pools.clone());
-
-    // --- Static Probe for CL Quoter ---
-    // AERO/USDC CL: 100 USDC -> AERO
-    /*
-    let usdc = Address::from_str(USDC_ADDR)?;
-    let aero = Address::from_str("0x940181a94A35A4569E4529A3CDfB74e38FD98631")?;
-    let q = Address::from_str("0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0")?;
-    info!("Starting Static Probe for CL Quoter...");
-    probe_quoter(
-        provider.as_ref(),
-        q,
-        usdc,
-        aero,
-        parse_amount("100", usdc), // 100 USDC
-        100,                       // tickSpacing
-        500,                       // fee
-    )
-    .await?;
-
-    probe_quoter_tuple(
-        provider.as_ref(),
-        q,
-        usdc,
-        aero,
-        parse_amount("100", usdc),
-        100,
-        500,
-    )
-    .await?;
-    */
+    let contract_address_exec = Address::from_str(&config.contract_address).unwrap();
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
-    // 定义所有作为起点的“基准代币”
     let base_tokens = vec![weth, usdc, usdbc, aero, cbeth, ezeth];
 
     loop {
@@ -947,7 +820,6 @@ async fn main() -> Result<()> {
         };
         let current_bn = block.number.unwrap();
         let block_number = current_bn.as_u64();
-        let block_timestamp = block.timestamp.as_u64();
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("Daily Gas Limit Reached.");
@@ -959,15 +831,12 @@ async fn main() -> Result<()> {
             .get_gas_price()
             .await
             .unwrap_or(parse_ether("0.0000000001").unwrap());
-        let _gas_cost_2hop = (gas_price * U256::from(300_000)).as_u128();
-        let _gas_cost_3hop = (gas_price * U256::from(450_000)).as_u128();
 
-        // 1. 获取 ETH -> USDC 的参考价格 (用于统一计价 Gas)
+        // 1. 获取 ETH -> USDC 的参考价格
         let mut eth_price_usdc = U256::zero();
         if let Some(p) = pools.iter().find(|p| {
             (p.token_a == weth && p.token_b == usdc) || (p.token_b == weth && p.token_a == usdc)
         }) {
-            // 尝试用 1 WETH 询价
             if let Ok(price) =
                 get_amount_out(client.clone(), p, weth, usdc, parse_ether("1").unwrap()).await
             {
@@ -978,16 +847,14 @@ async fn main() -> Result<()> {
         let mut candidates = Vec::new();
         let max_failures = 5;
 
-        // 遍历所有基准代币，寻找以它为起点的套利路径
+        // 遍历所有基准代币，寻找以它为起点的套利路径 (保持原始逻辑不变)
         for &base_token in &base_tokens {
             // 2-Hop
-            // 逻辑：base -> mid -> base
             for i in 0..pools.len() {
                 for j in 0..pools.len() {
                     if i == j {
                         continue;
                     }
-                    // Blacklist check
                     if pool_failures
                         .get(&pools[i].name)
                         .map(|c| *c > max_failures)
@@ -999,7 +866,7 @@ async fn main() -> Result<()> {
                     {
                         continue;
                     }
-                    // 池子 A 包含 base_token，池子 B 也包含 base_token
+
                     if (pools[i].token_a == base_token || pools[i].token_b == base_token)
                         && (pools[j].token_a == base_token || pools[j].token_b == base_token)
                     {
@@ -1014,7 +881,6 @@ async fn main() -> Result<()> {
                             pools[j].token_a
                         };
 
-                        // 如果两个池子的中间币是同一种
                         if mid_i == mid_j {
                             candidates.push(ArbPath {
                                 pools: vec![pools[i].clone(), pools[j].clone()],
@@ -1027,7 +893,6 @@ async fn main() -> Result<()> {
             }
 
             // 3-Hop
-            // 逻辑：base -> token1 -> token2 -> base
             for i in 0..pools.len() {
                 let pa = &pools[i];
                 if pa.token_a != base_token && pa.token_b != base_token {
@@ -1043,7 +908,6 @@ async fn main() -> Result<()> {
                     if i == j {
                         continue;
                     }
-                    // Blacklist check for i, j
                     if pool_failures
                         .get(&pools[i].name)
                         .map(|c| *c > max_failures)
@@ -1057,7 +921,6 @@ async fn main() -> Result<()> {
                     }
                     let pb = &pools[j];
 
-                    // 必须包含 token_1
                     if pb.token_a != token_1 && pb.token_b != token_1 {
                         continue;
                     }
@@ -1067,7 +930,6 @@ async fn main() -> Result<()> {
                         pb.token_a
                     };
 
-                    // 如果第 2 跳直接回到了 base_token，那是 2-hop，跳过
                     if token_2 == base_token {
                         continue;
                     }
@@ -1076,7 +938,6 @@ async fn main() -> Result<()> {
                         if k == i || k == j {
                             continue;
                         }
-                        // Blacklist check for k
                         if pool_failures
                             .get(&pools[k].name)
                             .map(|c| *c > max_failures)
@@ -1104,389 +965,140 @@ async fn main() -> Result<()> {
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let profitable_paths = Arc::new(AtomicUsize::new(0));
         let failed_paths = Arc::new(AtomicUsize::new(0));
+
         let ok_paths_ref = ok_paths.clone();
         let profitable_paths_ref = profitable_paths.clone();
         let failed_paths_ref = failed_paths.clone();
-        let pool_failures_ref = pool_failures.clone();
-        let profitable_history_ref = profitable_history.clone();
-        // [修改] 传递池子列表
+        // let pool_failures_ref = pool_failures.clone(); // Unused in this updated block
         let all_pools_ref = all_pools_arc.clone();
 
-        // 核心逻辑：遍历 candidates 路径
+        // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
         stream::iter(candidates)
             .for_each_concurrent(30, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
-                let failed_paths = failed_paths_ref.clone();
-                let pool_failures = pool_failures_ref.clone();
-                let profitable_history = profitable_history_ref.clone();
                 let client = client_ref.clone();
-                // [修改] 捕获 all_pools
                 let all_pools = all_pools_ref.clone();
 
                 async move {
-                    let mut path_is_ok = false;
-                    let mut path_is_profitable = false;
-                    let mut best_gross = I256::from(i64::MIN);
-                    let mut best_size = U256::zero();
-                    let mut found_any = false;
-
                     let start_token = path.tokens[0];
-                    let test_sizes = if decimals(start_token) == 6 {
-                        vec![
-                            parse_amount("50", start_token),
-                            parse_amount("100", start_token),
-                            parse_amount("250", start_token),
-                            parse_amount("500", start_token),
-                            parse_amount("1000", start_token),
-                            parse_amount("2500", start_token),
-                            parse_amount("5000", start_token),
-                            parse_amount("10000", start_token),
-                        ]
-                    } else {
-                        vec![
-                            parse_amount("0.01", start_token),
-                            parse_amount("0.05", start_token),
-                            parse_amount("0.1", start_token),
-                            parse_amount("0.5", start_token),
-                            parse_amount("1", start_token),
-                            parse_amount("2", start_token),
-                            parse_amount("5", start_token),
-                        ]
-                    };
-                    
-                    // [修改] 标记是否能精确计算Gas。现在我们用更高级的逻辑覆盖它，
-                    // 但保留此变量用于日志显示的兼容性 (GasMode: none/exact)
-                    let can_price_gas_legacy =
-                        start_token == weth || start_token == usdc || start_token == usdbc;
+                    let decimals_token = decimals(start_token);
 
-                    // 局部改动：针对每条路径，跑遍所有资金档位
-                    for size in test_sizes {
-                        let mut current_amt = size;
-                        let mut step_results = Vec::new();
-                        let mut failed = false;
+                    // A. 预估 Gas 消耗 (Wei)
+                    let estimated_gas_unit = if path.is_triangle { 280_000 } else { 160_000 };
+                    let gas_cost_wei_val = U256::from(estimated_gas_unit) * gas_price;
 
-                        // 逐跳获取报价
-                        for i in 0..path.pools.len() {
-                            match get_amount_out(
-                                client.clone(), // fixed clone inside loop
-                                &path.pools[i],
-                                path.tokens[i],
-                                path.tokens[i + 1],
-                                current_amt,
-                            )
-                            .await
-                            {
-                                Ok(out) => {
-                                    step_results.push((
-                                        current_amt,
-                                        out,
-                                        path.pools[i].name.clone(),
-                                    ));
-                                    current_amt = out;
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Path failed at {} (Size: {}): {:?}",
-                                        path.pools[i].name,
-                                        format_token_amount(size, start_token),
-                                        e
-                                    );
-                                    pool_failures
-                                        .entry(path.pools[i].name.clone())
-                                        .and_modify(|c| *c += 1)
-                                        .or_insert(1);
-                                    failed = true;
-                                    break;
-                                }
-                            }
-                        }
+                    // B. 黄金分割搜索最佳金额
+                    let best_result =
+                        optimize_amount_in(client.clone(), &path, I256::zero(), decimals_token)
+                            .await;
 
-                        if !failed {
-                            // 修改：只要路径没有 revert (failed == false)，就视为“有效路径”并计数
-                            if !path_is_ok {
-                                ok_paths.fetch_add(1, Ordering::Relaxed);
-                                path_is_ok = true;
-                            }
+                    if let Some((best_amount, best_gross_profit)) = best_result {
+                        ok_paths.fetch_add(1, Ordering::Relaxed);
 
-                            // 计算毛利
-                            let gross = if current_amt > size {
-                                I256::from((current_amt - size).as_u128())
-                            } else {
-                                -I256::from((size - current_amt).as_u128())
-                            };
-
-                            // 估算 Gas (2-hop 用 160k, 3-hop 用 280k)
-                            let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
-                            let gas_cost_wei = U256::from(gas_used) * gas_price;
-                            
-                            // [关键修改]：计算真实的 Gas 成本 (转换为当前 Token 单位)
-                            // 无论 start_token 是什么，我们都尝试通过 WETH 价格来换算真实的 Gas 负担
-                            let weth_addr = Address::from_str(WETH_ADDR).unwrap();
-
-                            let price_in_weth = get_price_in_weth(
-                                client.clone(), 
-                                start_token, 
-                                weth, 
-                                usdc, 
-                                usdbc, // 确保 main 开头定义了 usdbc
-                                &all_pools,
-                                eth_price_usdc // 这个变量你在 loop 开头已经计算了
-                            ).await;
-
-                            
-                            // L1 Data Fee Buffer (Base Chain Specific): 0.00005 ETH
-                            let l1_buffer = parse_ether("0.00005").unwrap();
-                            let total_gas_eth = gas_cost_wei + l1_buffer;
-
-                            let gas_cost = if start_token == weth {
-                                I256::from(total_gas_eth.as_u128())
-                            } else if (start_token == usdc || start_token == usdbc)
-                                && !eth_price_usdc.is_zero()
-                            {
-                                // Gas(Wei) -> USDC: (gas_wei * eth_price_usdc) / 1e18
-                                let gas_usdc =
-                                    (total_gas_eth * eth_price_usdc) / U256::from(10).pow(18.into());
-                                I256::from(gas_usdc.as_u128())
-                            } else if !price_in_weth.is_zero() {
-                                // [新增分支] 通用代币 (如 AERO)
-                                // 逻辑：1 Token = price_in_weth (Wei)
-                                // GasCost(Token) = (GasCostETH * 10^Decimals) / price_in_weth
-                                let decimals = decimals(start_token);
-                                let gas_in_token = (total_gas_eth * U256::from(10).pow(decimals.into())) / price_in_weth;
-                                I256::from(gas_in_token.as_u128())
-                            } else {
-                                // 确实无法定价，保持原状 (但后续过滤会拦截)
-                                I256::zero()
-                            };
-
-                            let net = gross - gas_cost;
-
-                            // --- Structured JSONL Logging ---
-                            let gross_bps: i128 = if size.as_u128() > 0 {
-                                (gross.as_i128() * 10_000i128) / (size.as_u128() as i128)
-                            } else {
-                                0
-                            };
-                            let net_bps: i128 = if size.as_u128() > 0 {
-                                (net.as_i128() * 10_000i128) / (size.as_u128() as i128)
-                            } else {
-                                0
-                            };
-
-                            let log_steps: Vec<StepLog> = step_results
-                                .iter()
-                                .enumerate()
-                                .map(|(i, (inp, outp, p_name))| StepLog {
-                                    pool: p_name.clone(),
-                                    token_in: token_symbol(path.tokens[i]),
-                                    token_out: token_symbol(path.tokens[i + 1]),
-                                    amount_in: inp.to_string(),
-                                    amount_out: outp.to_string(),
-                                })
-                                .collect();
-
-                            let log_entry = OpportunityLog {
-                                block: block_number,
-                                ts: block_timestamp,
-                                path: path.pools.iter().map(|p| p.name.clone()).collect(),
-                                tokens: path.tokens.iter().map(|&t| token_symbol(t)).collect(),
-                                size_raw: size.to_string(),
-                                out_raw: current_amt.to_string(),
-                                gross_raw: gross.to_string(),
-                                net_raw: net.to_string(),
-                                gross_bps,
-                                net_bps,
-                                gas_price_wei: gas_price.to_string(),
-                                gas_used_assumed: gas_used,
-                                gas_cost_priced_raw: gas_cost.to_string(),
-                                can_price_gas: !price_in_weth.is_zero(), // 更新此状态
-                                steps: log_steps,
-                            };
-
-                            // JSONL 写入逻辑
-                            // if let Err(e) = append_jsonl_log(&log_entry) {
-                            //     error!("Failed to write to trades.jsonl: {:?}", e);
-                            // }
-
-                            found_any = true;
-                            if gross > best_gross {
-                                best_gross = gross;
-                                best_size = size;
-                            }
-
-                            // 3. 统一计价：用 Net(BPS) 判定盈利
-                            // [关键修改]：引入硬性 ETH 门槛
-                            let mut net_is_profitable = false;
-                            
-                            // 只有当我们知道价格时，才能准确判定是否盈利
-                            if !price_in_weth.is_zero() && net > I256::zero() {
-                                // 将净利润 (Token) 换算回 ETH
-                                let net_token_u256 = U256::from(net.as_u128());
-                                let decimals = decimals(start_token);
-                                // Profit(ETH) = (Profit(Token) * Price(WETH)) / 10^Decimals
-                                let net_eth = (net_token_u256 * price_in_weth) / U256::from(10).pow(decimals.into());
-                                
-                                // 硬性门槛：$2.00 (约 0.0006 ETH)
-                                let min_threshold = parse_ether("0.0006").unwrap();
-                                if net_eth > min_threshold {
-                                    net_is_profitable = true;
-                                }
-                            } else if start_token == usdc || start_token == usdbc {
-                                // 针对稳定币保留直接判断
-                                net_is_profitable = net > I256::from(2_000_000); // > 2 USDC
-                            }
-
-                            if net_is_profitable {
-                                if !path_is_profitable {
-                                    profitable_paths.fetch_add(1, Ordering::Relaxed);
-                                    path_is_profitable = true;
-                                }
-
-                                let mut report = format!(
-                                    "--- Opportunity (Size: {}) ---\n",
-                                    format_token_amount(size, start_token)
-                                );
-                                for (idx, (inp, outp, p_name)) in step_results.iter().enumerate() {
-                                    report.push_str(&format!(
-                                        "  Step {}: {} -> {} via {}\n",
-                                        idx + 1,
-                                        format_token_amount(*inp, path.tokens[idx]),
-                                        format_token_amount(*outp, path.tokens[idx + 1]),
-                                        p_name
-                                    ));
-                                }
-                                report
-                                    .push_str(&format!("  Gross: {} | Net: {} WEI\n", gross, net));
-                                report.push_str(&format!(
-                                    "  Metadata: Block: {} | Token: {:?} (Dec: {}) | GasMode: {} | GasCostRaw: {} | GrossBps: {} | NetBps: {}\n",
-                                    block_number,
-                                    start_token,
-                                    decimals(start_token),
-                                    if !price_in_weth.is_zero() { "exact" } else { "none" },
-                                    gas_cost,
-                                    gross_bps,
-                                    net_bps
-                                ));
-
-                                info!("{}", report);
-                                append_log_to_file(&report);
-
-                                // 4. 邮件报警逻辑：连续 2 个区块盈利才发送
-                                let route_key = if path.is_triangle {
-                                    format!(
-                                        "{}->{}->{}",
-                                        path.pools[0].name, path.pools[1].name, path.pools[2].name
-                                    )
-                                } else {
-                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
-                                };
-
-                                let mut count = 1;
-                                {
-                                    let mut entry =
-                                        profitable_history.entry(route_key).or_insert((0, 0));
-                                    if entry.0 == block_number - 1 {
-                                        entry.1 += 1; // 连续区块
-                                        entry.0 = block_number;
-                                    } else if entry.0 < block_number - 1 {
-                                        entry.1 = 1; // 中断了，重置
-                                        entry.0 = block_number;
-                                    }
-                                    // 如果 entry.0 == block_number，说明本区块已经计数过（可能是不同 size），保持不变
-                                    count = entry.1;
-                                }
-
-                                if count >= 2 {
-                                    let subject = format!(
-                                        "Arbitrage Opportunity (Block {})",
-                                        block_number
-                                    );
-                                    let body = report.clone();
-                                    tokio::task::spawn_blocking(move || {
-                                        send_email_alert(&subject, &body)
-                                    });
-                                }
-                            }
-                        }
-                    }
-
-                    if !path_is_ok {
-                        failed_paths.fetch_add(1, Ordering::Relaxed);
-                    }
-
-                    // --- WATCH Log Generation (Post-computation) ---
-                    // This block now runs *after* iterating all sizes for a path.
-                    // It uses the best found gross profit to generate a single, accurate WATCH log.
-                    if found_any {
-                        // Only generate WATCH logs for tokens where we can accurately price gas.
-                        // [修改] 现在我们用 get_price_in_weth，大部分代币都可以计价了
+                        // C. 精确计算 Net Profit
                         let weth_addr = Address::from_str(WETH_ADDR).unwrap();
 
                         let price_in_weth = get_price_in_weth(
-                            client.clone(), 
-                            start_token, 
-                            weth, 
-                            usdc, 
-                            usdbc, // 确保 main 开头定义了 usdbc
+                            client.clone(),
+                            start_token,
+                            weth_addr,
+                            Address::from_str(USDC_ADDR).unwrap(),
+                            Address::from_str(USDBC_ADDR).unwrap(),
                             &all_pools,
-                            eth_price_usdc // 这个变量你在 loop 开头已经计算了
-                        ).await;
+                            eth_price_usdc,
+                        )
+                        .await;
 
-                        
-                        if !price_in_weth.is_zero() || start_token == usdc || start_token == usdbc {
-                            let gas_used = if path.is_triangle { 280_000 } else { 160_000 };
-                            let gas_cost_wei = U256::from(gas_used) * gas_price;
+                        let l1_buffer = parse_ether("0.00005").unwrap();
+                        let total_gas_wei = gas_cost_wei_val + l1_buffer;
 
-                            let gas_cost_display = if start_token == weth {
-                                I256::from(gas_cost_wei.as_u128())
-                            } else if (start_token == usdc || start_token == usdbc) && !eth_price_usdc.is_zero() {
-                                let gas_usdc = (gas_cost_wei * eth_price_usdc)
-                                    / U256::from(10).pow(18.into());
-                                I256::from(gas_usdc.as_u128())
-                            } else {
-                                // [修改] 使用通用计价逻辑计算显示的 Gas
-                                let decimals = decimals(start_token);
-                                let gas_in_token = (gas_cost_wei * U256::from(10).pow(decimals.into())) / price_in_weth;
-                                I256::from(gas_in_token.as_u128())
-                            };
+                        let gas_cost_token = if start_token == weth_addr {
+                            I256::from(total_gas_wei.as_u128())
+                        } else if !price_in_weth.is_zero() {
+                            let val = (total_gas_wei * U256::from(10).pow(decimals_token.into()))
+                                / price_in_weth;
+                            I256::from(val.as_u128())
+                        } else {
+                            I256::max_value()
+                        };
 
-                            let best_net = best_gross - gas_cost_display;
+                        let net_profit = best_gross_profit - gas_cost_token;
 
-                            let near_threshold = if start_token == usdc || start_token == usdbc {
-                                I256::from(-50_000i128) // -0.05 USDC
-                            } else {
-                                // WETH
-                                I256::from(-50_000_000_000_000i128) // -0.00005 ETH
-                            };
-                            
-                            // 针对 AERO 等，我们也应该用一个相对阈值，这里简单处理，如果 price 存在，允许稍微亏损一点也显示观察日志
-                            let should_log_watch = if !price_in_weth.is_zero() {
-                                best_net > I256::zero() // 只要毛利能覆盖 Gas，就记录 Watch
-                            } else {
-                                best_net > near_threshold
-                            };
+                        // D. 盈利判定与执行
+                        let mut is_executable = false;
+                        let min_profit_eth_threshold = parse_ether("0.0005").unwrap();
 
-                            if should_log_watch {
-                                let net_bps: i128 = if best_size.as_u128() > 0 {
-                                    (best_net.as_i128() * 10_000i128)
-                                        / (best_size.as_u128() as i128)
-                                } else {
-                                    0
-                                };
+                        if !price_in_weth.is_zero() && net_profit > I256::zero() {
+                            let net_eth = (U256::from(net_profit.as_u128()) * price_in_weth)
+                                / U256::from(10).pow(decimals_token.into());
 
-                                let route_name = if path.is_triangle {
-                                    format!("{}->{}->{}", path.pools[0].name, path.pools[1].name, path.pools[2].name)
-                                } else {
-                                    format!("{}->{}", path.pools[0].name, path.pools[1].name)
-                                };
-
-                                let report = format!(
-                                    "WATCH: {} | Best Size: {} | Gross: {} | Net: {} (Gas: {}) | NetBps: {}",
-                                    route_name, format_token_amount(best_size, start_token), best_gross, best_net, gas_cost_display, net_bps
-                                );
-                                info!("{}", report);
+                            if net_eth >= min_profit_eth_threshold {
+                                is_executable = true;
                             }
+                        } else if (start_token == Address::from_str(USDC_ADDR).unwrap()
+                            || start_token == Address::from_str(USDBC_ADDR).unwrap())
+                            && net_profit > I256::from(1_500_000)
+                        {
+                            is_executable = true;
+                        }
+
+                        if is_executable {
+                            // ----------------- [START FIX: Main Loop Execution] -----------------
+                            // 在 if is_executable { ... } 内部：
+
+                            profitable_paths.fetch_add(1, Ordering::Relaxed);
+
+                            let log_msg = format!(
+        "PROFIT FOUND: Token: {} | Size: {} | Gross: {} | Net: {} | Gas: {}",
+        token_symbol(start_token),
+        format_token_amount(best_amount, start_token),
+        best_gross_profit,
+        net_profit,
+        gas_cost_token
+    );
+                            info!("{}", log_msg);
+                            append_log_to_file(&log_msg);
+
+                            // [新增] 准备执行数据
+                            let gross_u256 = U256::from(best_gross_profit.as_u128());
+                            let client_clone = client.clone();
+
+                            // [关键步骤] 数据转换：将 PoolConfig 列表转换为 execution 模块接受的元组列表
+                            // 格式: (PoolAddr, TokenIn, TokenOut, Fee, Protocol)
+                            // 这样 execution.rs 就不需要依赖 main.rs 中的 Struct 定义
+                            let pools_data: Vec<(Address, Address, Address, u32, u8)> = path
+                                .pools
+                                .iter()
+                                .enumerate()
+                                .map(|(i, p)| {
+                                    (
+                                        p.pool.expect("Pool address missing"), // 确保池子地址存在
+                                        path.tokens[i],                        // 当前跳的输入代币
+                                        path.tokens[i + 1],                    // 当前跳的输出代币
+                                        p.fee,
+                                        p.protocol,
+                                    )
+                                })
+                                .collect();
+
+                            // 异步提交交易
+                            tokio::spawn(async move {
+                                // contract_address_exec 需要在 loop 外定义好:
+                                // let contract_address_exec = Address::from_str(&config.contract_address).unwrap();
+                                match execute_transaction(
+                                    client_clone,
+                                    contract_address_exec, // 确保这个变量被 async move 捕获
+                                    best_amount,
+                                    gross_u256,
+                                    pools_data,
+                                )
+                                .await
+                                {
+                                    Ok(tx) => info!("Tx Sent: {:?}", tx),
+                                    Err(e) => error!("Tx Failed: {:?}", e),
+                                }
+                            });
                         }
                     }
                 }
@@ -1494,17 +1106,12 @@ async fn main() -> Result<()> {
             .await;
 
         let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
-        let ok_paths_count = ok_paths.load(Ordering::Relaxed);
-        let profitable_paths_count = profitable_paths.load(Ordering::Relaxed);
-        let failed_paths_count = failed_paths.load(Ordering::Relaxed);
         info!(
-            "--- Block {} | Gas: {} gwei | Cands: {} -> Ok: {} -> Profitable: {} -> Failed: {} ---",
+            "Block {} | Gas: {} gwei | Cands: {} | Profitable: {}",
             current_bn,
             gas_gwei,
             total_candidates,
-            ok_paths_count,
-            profitable_paths_count,
-            failed_paths_count
+            profitable_paths.load(Ordering::Relaxed)
         );
     }
 
