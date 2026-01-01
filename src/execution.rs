@@ -7,7 +7,7 @@ use tracing::{info, warn};
 abigen!(
     ArbEngine,
     r#"[
-        struct ArbStep { address pool; address tokenIn; address tokenOut; uint24 fee; uint8 protocol; }
+        struct ArbStep { address router; address tokenIn; address tokenOut; uint24 fee; uint8 protocol; }
         function executeArb(uint256 amountIn, uint256 minProfit, ArbStep[] calldata steps) external payable returns (uint256 amountOut)
     ]"#
 );
@@ -23,8 +23,8 @@ pub async fn execute_transaction(
     // 1. 构建合约调用参数
     let steps: Vec<ArbStep> = pools_data
         .into_iter()
-        .map(|(pool, token_in, token_out, fee, protocol)| ArbStep {
-            pool,
+        .map(|(router, token_in, token_out, fee, protocol)| ArbStep {
+            router,
             token_in,
             token_out,
             fee: fee as u32,

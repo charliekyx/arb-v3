@@ -1073,9 +1073,9 @@ async fn main() -> Result<()> {
                                 .enumerate()
                                 .map(|(i, p)| {
                                     (
-                                        p.pool.expect("Pool address missing"), // 确保池子地址存在
-                                        path.tokens[i],                        // 当前跳的输入代币
-                                        path.tokens[i + 1],                    // 当前跳的输出代币
+                                        p.router,
+                                        path.tokens[i],     // 当前跳的输入代币
+                                        path.tokens[i + 1], // 当前跳的输出代币
                                         p.fee,
                                         p.protocol,
                                     )
