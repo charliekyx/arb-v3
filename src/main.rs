@@ -24,6 +24,7 @@ use std::{
     time::Duration,
 };
 use tracing::{error, info, warn};
+use uniswap_v3_math::tick_math;
 
 // 引入 Execution 模块
 mod execution;
@@ -39,6 +40,22 @@ struct AppConfig {
     smtp_password: String,
     my_email: String,
 }
+
+#[derive(Debug, Clone)]
+struct CachedPoolState {
+    block_number: U64,
+    // V2 Data
+    reserve0: u128,
+    reserve1: u128,
+    // V3 Data
+    sqrt_price_x96: U256,
+    liquidity: u128,
+    tick: i32,
+    tick_spacing: i32,
+}
+
+// Global cache to store pool state. Key: Pool Address
+type PoolCache = Arc<DashMap<Address, CachedPoolState>>;
 
 #[derive(Debug, Deserialize, Clone)]
 struct JsonPoolInput {
@@ -99,7 +116,9 @@ struct OpportunityLog {
 // --- ABI Definitions ---
 abigen!(
     // 必须调用 Uniswap 官方的 QuoterV2 合约的 quoteExactInputSingle 函数。
-    // 因为 V3 的数学逻辑太复杂（涉及跨越多个 Tick, 很难在本地完美模拟。)
+    // 因为 V3 的数学逻辑太复杂（涉及跨越多个 Tick, 很难在本地完美模拟)
+    // https://docs.uniswap.org/contracts/v3/reference/periphery/lens/QuoterV2
+    // These functions are not gas efficient and should not be called on chain. Instead, optimistically execute the swap and check the amounts in the callback.
     IQuoterV2,
     r#"[
         struct QuoteParams { address tokenIn; address tokenOut; uint256 amountIn; uint24 fee; uint160 sqrtPriceLimitX96; }
@@ -107,11 +126,18 @@ abigen!(
     ]"#;
 
     // 使用 Aerodrome 专门的 CLQuoter 合约。虽然原理和 V3 一样，但合约接口（ABI）略有不同（例如返回值的结构），所以专门写了 IAerodromeCLQuoter 来适配
+    // https://github.com/aerodrome-finance/contracts?tab=readme-ov-file
     IAerodromeCLQuoter,
     r#"[
         struct CLQuoteParams { address tokenIn; address tokenOut; uint256 amountIn; int24 tickSpacing; uint160 sqrtPriceLimitX96; }
         function quoteExactInputSingle(CLQuoteParams params) external returns (uint256 amountOut, uint256 r1, uint256 r2, uint256 r3)
     ]"#;
+
+    // ICLPool (Concentrated Liquidity Pool), 这个接口对应 Uniswap V3 的核心池子合约（Core Pool
+    // slot0(): 返回池子的当前状态，包括最重要的 sqrtPriceX96（当前价格的平方根）和 tick
+    // liquidity(): 返回池子在当前 Tick 下的有效流动性总量。uniswap
+    // tickSpacing(): 决定了价格刻度的密度，不同费率的池子该值不同。
+    // https://docs.uniswap.org/contracts/v3/reference/core/UniswapV3Pool
 
     ICLPool,
     r#"[
@@ -126,17 +152,19 @@ abigen!(
     // Aerodrome (以及它的前身 Velodrome/Solidly) 的 Pair 合约里额外包含了一个 getAmountOut 函数。
     // 在 Aerodrome 中称为 Basic/Volatile 和 Stable 池
     // 目前配置文件里，所有 Aerodrome 的池子都标记为 "protocol": "cl"
-    // 支持：Aerodrome 的 Basic (Volatile) 池子。因为它们使用的是标准的 $x \times y = k$ 公式，和你代码里的本地计算逻辑兼容。
+    // 支持：Aerodrome 的 Basic (Volatile) 池子。因为它们使用的是标准的 $x \times y = k$ 公式，和代码里的本地计算逻辑兼容。
     // 注意！！ 不支持：Aerodrome 的 Stable 池子（如 USDC/USDbC Basic）。因为稳定币池使用的是 $x^3y + y^3x = k$ 的混合曲线公式，你目前的本地计算函数算出来的价格会是错的。
     // 标准的 Uniswap V2 Pair 合约里没有 getAmountOut（Uniswap V2 的询价通常是在 Router 合约里算的，或者链下算）
+    // https://docs.uniswap.org/contracts/v2/reference/smart-contracts/pair
     IUniswapV2Pair,
     r#"[
-        function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast)
+        function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
         function token0() external view returns (address)
         function token1() external view returns (address)
     ]"#
 );
 
+// todo: 配置在环境变量里面
 const WETH_ADDR: &str = "0x4200000000000000000000000000000000000006";
 const USDC_ADDR: &str = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const USDBC_ADDR: &str = "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA";
@@ -393,6 +421,15 @@ async fn validate_v2_pool(
     }
 }
 
+/// Helper to get the correct pool address based on protocol
+fn get_pool_address(pool: &PoolConfig) -> Option<Address> {
+    if pool.protocol == 1 {
+        pool.quoter // V2 uses quoter as pair address
+    } else {
+        pool.pool // V3/CL uses pool
+    }
+}
+
 fn send_email_alert(subject: &str, body: &str) {
     let email_user = "charlieyuxx@gmail.com";
     let email_pass = "sabw gnll hfuq yesl";
@@ -423,108 +460,208 @@ fn send_email_alert(subject: &str, body: &str) {
     }
 }
 
+// Local V2 calculation (Math only, no IPC)
 fn get_v2_amount_out_local(
     amount_in: U256,
     reserve_in: U256,
     reserve_out: U256,
-    fee_bps: u32,
+    fee_bps: U256,
 ) -> U256 {
-    if amount_in.is_zero() {
+    if amount_in.is_zero() || reserve_in.is_zero() || reserve_out.is_zero() {
         return U256::zero();
     }
-    let amount_in_with_fee = amount_in * U256::from(10000 - fee_bps);
+    let amount_in_with_fee = amount_in * (U256::from(10000) - fee_bps);
     let numerator = amount_in_with_fee * reserve_out;
-    let denominator = (reserve_in * 10000) + amount_in_with_fee;
-    numerator.checked_div(denominator).unwrap_or_default()
+    let denominator = (reserve_in * U256::from(10000)) + amount_in_with_fee;
+    if denominator.is_zero() {
+        U256::zero()
+    } else {
+        numerator / denominator
+    }
 }
 
+// Local V3 calculation (Math only, using uniswap_v3_math)
+// NOTE: This assumes swap does not cross tick boundaries (Small amounts).
+// For full production, you must implement step-by-step swap within ticks.
+fn get_v3_amount_out_local(
+    amount_in: U256,
+    sqrt_price_x96: U256,
+    liquidity: u128,
+    zero_for_one: bool,
+    fee_pips: u32, // fee in pips (e.g., 3000 for 0.3%)
+) -> Result<U256> {
+    if liquidity == 0 {
+        return Ok(U256::zero());
+    }
+
+    // Convert U256 to library types if needed, or implement simplified formula:
+    // This is a simplified "single tick" swap simulation for speed.
+    // Real prod bots sync the tick bitmap to handle large swaps.
+
+    // Calculate Next SqrtPrice
+    // formula: new_sqrt_price = sqrt_price + (amount_in / liquidity) ... roughly
+
+    // For this example, let's use a simplified constant product estimation for small moves
+    // OR use the library `uniswap_v3_math::swap_math::compute_swap_step`
+
+    let price_limit = if zero_for_one {
+        tick_math::MIN_SQRT_RATIO + U256::one()
+    } else {
+        tick_math::MAX_SQRT_RATIO - U256::one()
+    };
+
+    let amount_remaining = I256::from_raw(amount_in);
+
+    // Call the library function (simulated call)
+    let (_amount_in_used, amount_out_received, _next_price, _next_liquidity) =
+        uniswap_v3_math::swap_math::compute_swap_step(
+            sqrt_price_x96,
+            price_limit,
+            liquidity,
+            amount_remaining,
+            fee_pips,
+        )?;
+
+    Ok(amount_out_received)
+}
+
+// The Main Pricing Function: Reads from Memory Cache
 async fn get_amount_out(
-    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
-    pool: &PoolConfig,
+    amount_in: U256,
     token_in: Address,
     token_out: Address,
-    amount_in: U256,
+    pool: &PoolConfig,
+    cache: &PoolCache,
+    current_block: U64,
 ) -> Result<U256> {
-    if !pool_supports(pool, token_in, token_out) {
-        return Err(anyhow!(
-            "Pool mismatch: {} cannot swap {:?} -> {:?}",
-            pool.name,
-            token_in,
-            token_out
-        ));
-    }
-    if pool.protocol == 1 {
-        let pair = IUniswapV2Pair::new(pool.quoter.unwrap(), client);
-        let (r0, r1, _) = pair
-            .get_reserves()
-            .call()
-            .await
-            .map_err(|e| anyhow!("V2 getReserves failed: {}", e))?;
+    // 1. Check Cache
+    let Some(address) = get_pool_address(pool) else {
+        return Ok(U256::zero());
+    };
+    let state_guard = cache.get(&address);
+    let state = match state_guard {
+        Some(s) => s,
+        None => return Ok(U256::zero()), // If state not synced yet, skip
+    };
 
-        let token0 = if pool.token_a < pool.token_b {
-            pool.token_a
-        } else {
-            pool.token_b
-        };
-        let (reserve_in, reserve_out) = if token_in == token0 {
+    // Optional: Check if state is stale (too old)
+    if current_block > state.block_number + U64::from(10) {
+        // Data too old, unsafe to trade
+        return Ok(U256::zero());
+    }
+
+    if pool.protocol == 1 {
+        // === V2 Logic ===
+        let (r0, r1) = (U256::from(state.reserve0), U256::from(state.reserve1));
+        let (reserve_in, reserve_out) = if token_in < token_out {
             (r0, r1)
         } else {
             (r1, r0)
         };
-
-        let fee_bps = if pool.name.to_lowercase().contains("baseswap") {
-            25
-        } else {
-            30
-        };
-
         Ok(get_v2_amount_out_local(
             amount_in,
             reserve_in,
             reserve_out,
-            fee_bps,
+            U256::from(pool.fee),
         ))
-    } else if pool.protocol == 2 {
-        let q = pool
-            .quoter
-            .ok_or_else(|| anyhow!("CL missing quoter: {}", pool.name))?;
-        let quoter = IAerodromeCLQuoter::new(q, client.clone());
-        let params = i_aerodrome_cl_quoter::CLQuoteParams {
-            token_in,
-            token_out,
-            amount_in,
-            tick_spacing: pool.tick_spacing,
-            sqrt_price_limit_x96: U256::zero(),
-        };
-        let (amount_out, _r1, _r2, _r3) = quoter
-            .quote_exact_input_single(params)
-            .call()
-            .await
-            .map_err(|e| anyhow!("CL Quoter call failed {}: {:?}", pool.name, e))?;
-        return Ok(amount_out);
     } else {
-        let quoter_addr = pool.quoter.ok_or(anyhow!("V3 missing quoter"))?;
-        let quoter = IQuoterV2::new(quoter_addr, client);
-        let params = i_quoter_v2::QuoteParams {
-            token_in,
-            token_out,
+        // === V3 Logic ===
+        let zero_for_one = token_in < token_out;
+        get_v3_amount_out_local(
             amount_in,
-            fee: pool.fee,
-            sqrt_price_limit_x96: U256::zero(),
-        };
-        let (amount_out, _, _, _) = quoter.quote_exact_input_single(params).call().await?;
-        Ok(amount_out)
+            state.sqrt_price_x96,
+            state.liquidity,
+            zero_for_one,
+            pool.fee as u32,
+        )
     }
 }
 
+// === 3. Bulk State Updater ===
+
+async fn update_all_pools(
+    provider: Arc<Provider<Ipc>>,
+    pools: &[PoolConfig],
+    cache: PoolCache,
+    current_block: U64,
+) {
+    // We only update pools that we actually use.
+    // Optimization: In prod, use `Multicall` contract to fetch 100+ pools in 1 RPC call.
+    // Here we use concurrent fetches which is still faster than serial.
+
+    stream::iter(pools)
+        .for_each_concurrent(50, |pool| {
+            // Fetch 50 pools in parallel
+            let provider_clone = provider.clone();
+            let cache_clone = cache.clone();
+            async move {
+                // Determine the correct address for the pool
+                let Some(address) = get_pool_address(pool) else {
+                    // Skip if the pool has no address for its protocol type
+                    return;
+                };
+
+                // Skip if already updated this block
+                if let Some(s) = cache_clone.get(&address) {
+                    if s.block_number == current_block {
+                        return;
+                    }
+                }
+
+                if pool.protocol == 1 {
+                    // Fetch V2 Reserves
+                    let pair = IUniswapV2Pair::new(address, provider_clone);
+                    if let Ok((r0, r1, _)) = pair.get_reserves().call().await {
+                        cache_clone.insert(
+                            address,
+                            CachedPoolState {
+                                block_number: current_block,
+                                reserve0: r0,
+                                reserve1: r1,
+                                sqrt_price_x96: U256::zero(),
+                                liquidity: 0,
+                                tick: 0,
+                                tick_spacing: 0,
+                            },
+                        );
+                    }
+                } else {
+                    // Fetch V3 Slot0 and Liquidity
+                    // NOTE: Use ICLPool which is already defined in your abigen! block
+                    let v3_pool = ICLPool::new(address, provider_clone);
+                    // Run both requests in parallel
+                    let f1 = v3_pool.slot_0();
+                    let f2 = v3_pool.liquidity();
+
+                    if let (Ok(slot0_data), Ok(liq)) = tokio::join!(f1, f2) {
+                        cache_clone.insert(
+                            address,
+                            CachedPoolState {
+                                block_number: current_block,
+                                reserve0: 0,
+                                reserve1: 0,
+                                sqrt_price_x96: slot0_data.0, // sqrtPriceX96
+                                tick: slot0_data.1,           // tick
+                                liquidity: liq,
+                                tick_spacing: pool.tick_spacing, // from config
+                            },
+                        );
+                    }
+                }
+            }
+        })
+        .await;
+}
+
 async fn get_price_in_weth(
-    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     token: Address,
     weth: Address,
     usdc: Address,
     usdbc: Address,
     all_pools: &[PoolConfig],
     eth_price_in_usdc: U256,
+    cache: &PoolCache,
+    current_block: U64,
 ) -> U256 {
     if token == weth {
         return parse_ether("1").unwrap();
@@ -544,7 +681,9 @@ async fn get_price_in_weth(
     });
 
     if let Some(pool) = weth_pair {
-        if let Ok(price_wei) = get_amount_out(client.clone(), pool, token, weth, one_unit).await {
+        if let Ok(price_wei) =
+            get_amount_out(one_unit, token, weth, pool, cache, current_block).await
+        {
             return price_wei;
         }
     }
@@ -567,7 +706,7 @@ async fn get_price_in_weth(
                 usdbc
             };
             if let Ok(price_usdc) =
-                get_amount_out(client, pool, token, target_stable, one_unit).await
+                get_amount_out(one_unit, token, target_stable, pool, cache, current_block).await
             {
                 // Token_ETH = (price_usdc * 1e18) / eth_price_in_usdc
                 let price_in_eth = (price_usdc * U256::from(10).pow(18.into())) / eth_price_in_usdc;
@@ -581,10 +720,11 @@ async fn get_price_in_weth(
 
 // 黄金分割搜索算法
 async fn optimize_amount_in(
-    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     path: &ArbPath,
     gas_cost_wei: I256,
     start_token_decimals: u32,
+    cache: &PoolCache,
+    current_block: U64,
 ) -> Option<(U256, I256)> {
     let one_unit = U256::from(10).pow(start_token_decimals.into());
     let mut low = one_unit * 10;
@@ -594,20 +734,25 @@ async fn optimize_amount_in(
     let phi_den = 1000;
     let iterations = 10;
 
-    // [修复点] 修改闭包结构
     let calc_profit = |amt: U256| {
-        // 1. 在 async 块之外 clone 数据
-        let client = client.clone();
         let pools = path.pools.clone();
         let tokens = path.tokens.clone();
+        let cache = cache.clone();
 
         // 2. 返回拥有独立数据的 Future
         async move {
             let mut current = amt;
             // 使用 clone 进来的 pools 和 tokens
             for i in 0..pools.len() {
-                match get_amount_out(client.clone(), &pools[i], tokens[i], tokens[i + 1], current)
-                    .await
+                match get_amount_out(
+                    current,
+                    tokens[i],
+                    tokens[i + 1],
+                    &pools[i],
+                    &cache,
+                    current_block,
+                )
+                .await
                 {
                     Ok(out) => current = out,
                     Err(_) => return I256::min_value(),
@@ -695,6 +840,8 @@ async fn main() -> Result<()> {
 
     let mut pools = Vec::new();
 
+    let cache: PoolCache = Arc::new(DashMap::new());
+
     info!("Validating pools before startup...");
     for cfg in json_configs {
         let token_a = Address::from_str(&cfg.token_a)?;
@@ -769,39 +916,6 @@ async fn main() -> Result<()> {
     }
     info!("Active Pools: {}", pools.len());
 
-    info!("Starting Pre-flight Cleanup (Removing dead pools)...");
-    let mut clean_pools = Vec::new();
-
-    for pool in pools {
-        if pool.protocol == 1 {
-            clean_pools.push(pool);
-            continue;
-        }
-
-        let test_amount = if pool.token_a == usdc || pool.token_b == usdc {
-            parse_units("0.1", 6).unwrap().into()
-        } else {
-            parse_units("0.0001", 18).unwrap().into()
-        };
-
-        if get_amount_out(
-            client.clone(),
-            &pool,
-            pool.token_a,
-            pool.token_b,
-            test_amount,
-        )
-        .await
-        .is_ok()
-        {
-            clean_pools.push(pool);
-        } else {
-            warn!("Removing dead pool [{}]: Quote failed", pool.name);
-        }
-    }
-    pools = clean_pools;
-    info!("Cleanup Complete. Valid Pools: {}", pools.len());
-
     let all_pools_arc = Arc::new(pools.clone());
     let contract_address_exec = Address::from_str(&config.contract_address).unwrap();
 
@@ -821,6 +935,9 @@ async fn main() -> Result<()> {
         let current_bn = block.number.unwrap();
         let block_number = current_bn.as_u64();
 
+        info!("Block {}: Syncing pool states...", block_number);
+        update_all_pools(provider.clone(), &pools, cache.clone(), current_bn).await;
+
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("Daily Gas Limit Reached.");
             break;
@@ -838,7 +955,7 @@ async fn main() -> Result<()> {
             (p.token_a == weth && p.token_b == usdc) || (p.token_b == weth && p.token_a == usdc)
         }) {
             if let Ok(price) =
-                get_amount_out(client.clone(), p, weth, usdc, parse_ether("1").unwrap()).await
+                get_amount_out(parse_ether("1").unwrap(), weth, usdc, p, &cache, current_bn).await
             {
                 eth_price_usdc = price;
             }
@@ -964,21 +1081,22 @@ async fn main() -> Result<()> {
         let total_candidates = candidates.len();
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let profitable_paths = Arc::new(AtomicUsize::new(0));
-        let failed_paths = Arc::new(AtomicUsize::new(0));
+        let _failed_paths = Arc::new(AtomicUsize::new(0));
 
         let ok_paths_ref = ok_paths.clone();
         let profitable_paths_ref = profitable_paths.clone();
-        let failed_paths_ref = failed_paths.clone();
         // let pool_failures_ref = pool_failures.clone(); // Unused in this updated block
         let all_pools_ref = all_pools_arc.clone();
 
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
-        stream::iter(candidates)
-            .for_each_concurrent(30, |path| {
+        stream::iter(candidates).for_each_concurrent(500, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
                 let client = client_ref.clone();
                 let all_pools = all_pools_ref.clone();
+                // Clone Arcs for the async block
+                let cache = cache.clone();
+                let provider = provider.clone();
 
                 async move {
                     let start_token = path.tokens[0];
@@ -986,12 +1104,10 @@ async fn main() -> Result<()> {
 
                     // A. 预估 Gas 消耗 (Wei)
                     let estimated_gas_unit = if path.is_triangle { 280_000 } else { 160_000 };
-                    let gas_cost_wei_val = U256::from(estimated_gas_unit) * gas_price;
+                    let _gas_cost_wei_val = U256::from(estimated_gas_unit) * gas_price;
 
                     // B. 黄金分割搜索最佳金额
-                    let best_result =
-                        optimize_amount_in(client.clone(), &path, I256::zero(), decimals_token)
-                            .await;
+                    let best_result = optimize_amount_in(&path, I256::zero(), decimals_token, &cache, current_bn).await;
 
                     if let Some((best_amount, best_gross_profit)) = best_result {
                         ok_paths.fetch_add(1, Ordering::Relaxed);
@@ -1000,18 +1116,19 @@ async fn main() -> Result<()> {
                         let weth_addr = Address::from_str(WETH_ADDR).unwrap();
 
                         let price_in_weth = get_price_in_weth(
-                            client.clone(),
                             start_token,
                             weth_addr,
                             Address::from_str(USDC_ADDR).unwrap(),
                             Address::from_str(USDBC_ADDR).unwrap(),
                             &all_pools,
                             eth_price_usdc,
+                            &cache,
+                            current_bn,
                         )
                         .await;
 
                         let l1_buffer = parse_ether("0.00005").unwrap();
-                        let total_gas_wei = gas_cost_wei_val + l1_buffer;
+                        let total_gas_wei = _gas_cost_wei_val + l1_buffer;
 
                         let gas_cost_token = if start_token == weth_addr {
                             I256::from(total_gas_wei.as_u128())
@@ -1044,23 +1161,21 @@ async fn main() -> Result<()> {
                         }
 
                         if is_executable {
-                            // ----------------- [START FIX: Main Loop Execution] -----------------
-                            // 在 if is_executable { ... } 内部：
 
                             profitable_paths.fetch_add(1, Ordering::Relaxed);
 
                             let log_msg = format!(
-        "PROFIT FOUND: Token: {} | Size: {} | Gross: {} | Net: {} | Gas: {}",
-        token_symbol(start_token),
-        format_token_amount(best_amount, start_token),
-        best_gross_profit,
-        net_profit,
-        gas_cost_token
-    );
+                                "PROFIT FOUND: Token: {} | Size: {} | Gross: {} | Net: {} | Gas: {}",
+                                token_symbol(start_token),
+                                format_token_amount(best_amount, start_token),
+                                best_gross_profit,
+                                net_profit,
+                                gas_cost_token
+                            );
                             info!("{}", log_msg);
                             append_log_to_file(&log_msg);
 
-                            // [新增] 准备执行数据
+                            // 准备执行数据
                             let gross_u256 = U256::from(best_gross_profit.as_u128());
                             let client_clone = client.clone();
 
@@ -1092,6 +1207,7 @@ async fn main() -> Result<()> {
                                     best_amount,
                                     gross_u256,
                                     pools_data,
+                                    provider,
                                 )
                                 .await
                                 {

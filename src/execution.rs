@@ -1,5 +1,6 @@
 use anyhow::Result;
 use ethers::prelude::*;
+use ethers::utils::parse_units;
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -19,6 +20,7 @@ pub async fn execute_transaction(
     amount_in: U256,
     _expected_gross_profit: U256,
     pools_data: Vec<(Address, Address, Address, u32, u8)>,
+    provider: Arc<Provider<Ipc>>,
 ) -> Result<TxHash> {
     // 1. 构建合约调用参数
     let steps: Vec<ArbStep> = pools_data
@@ -45,9 +47,28 @@ pub async fn execute_transaction(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Failed to get latest block"))?;
 
+    // 1. Get current network gas status
+    let (max_fee, priority_fee) = match provider.estimate_eip1559_fees(None).await {
+        Ok((base, prio)) => {
+            // Aggressive Strategy:
+            // Base Fee + 20% buffer
+            // Priority Fee: Use network average or at least 0.1 gwei (Base chain default)
+            let aggressive_prio: U256 = if prio < parse_units("0.1", "gwei").unwrap().into() {
+                parse_units("0.1", "gwei").unwrap().into()
+            } else {
+                prio
+            };
+            (base * 120 / 100 + aggressive_prio, aggressive_prio)
+        }
+        Err(_) => (
+            parse_units("0.1", "gwei")?.into(),
+            parse_units("0.05", "gwei")?.into(),
+        ), // Fallback
+    };
+
     let base_fee = block.base_fee_per_gas.unwrap_or_default();
-    let priority_fee = ethers::utils::parse_units("0.05", "gwei").unwrap();
-    let max_fee = (base_fee * 2) + priority_fee;
+    // let priority_fee = ethers::utils::parse_units("0.05", "gwei").unwrap();
+    // let max_fee = (base_fee * 2) + priority_fee;
 
     // 4. 模拟执行 (Estimate Gas)
     let estimated_gas: U256 = match call.estimate_gas().await {

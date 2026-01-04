@@ -26,3 +26,4 @@ cocoon = "0.4"
 rpassword = "7.0"
 # 新增：用于高并发查询
 futures = "0.3"
+uniswap_v3_math = "0.4.0" # 用于本地计算 V3 价格
