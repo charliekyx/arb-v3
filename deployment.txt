@@ -1,52 +1,18 @@
-# 替换为私钥 (注意：部署者将自动成为 Owner/Executor)
-export PRIVATE_KEY="私钥" 
+# 替换为你的部署者私钥
+export DEPLOYER_PRIVATE_KEY="<YOUR_DEPLOYER_PRIVATE_KEY>" 
+# 替换为你的机器人钱包地址
+export BOT_WALLET_ADDRESS="<YOUR_BOT_WALLET_ADDRESS>"
 # Base 官方 RPC 或的本地节点
 export RPC_URL="https://mainnet.base.org"
 
+# 1. 部署合约
+# 注意：合约文件名是 Contract.sol
 forge create --rpc-url $RPC_URL \
-  --private-key $PRIVATE_KEY \
-  src/FlashLoanExecutor.sol:FlashLoanExecutor
+  --private-key $DEPLOYER_PRIVATE_KEY \
+  Contract.sol:FlashLoanExecutor
 
-
-# 将 Bot钱包地址 替换为你的 Bot Public Address
-
-  cast send <合约地址> "transferOwnership(address)" <Bot钱包地址> \
+# 2. 将你的机器人钱包地址设置为合约的执行者 (Executor)
+# 部署者将保持为 Owner
+cast send <DEPLOYED_CONTRACT_ADDRESS> "setExecutor(address)" $BOT_WALLET_ADDRESS \
   --rpc-url $RPC_URL \
-  --private-key $PRIVATE_KEY
-
-
-cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0x2948acbbc8795267e62a1220683a48e718b52585 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-
-  cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-
-  cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0x8c1A3cF8f83074169FE5D7aD50B978e1cd6b37c7 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-
-  cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0xD4a7FEbD52efda82d6f8acE24908aE0aa5b4f956 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-
-  cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0x8c1A3cF8f83074169FE5D7aD50B978e1cd6b37c7 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
-
-  cast send <合约地址> "approveToken(address,address,uint256)" \
-  0x4200000000000000000000000000000000000006 \
-  0xD4a7FEbD52efda82d6f8acE24908aE0aa5b4f956 \
-  115792089237316195423570985008687907853269984665640564039457584007913129639935 \
-  --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+  --private-key $DEPLOYER_PRIVATE_KEY

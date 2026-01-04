@@ -9,7 +9,7 @@ abigen!(
     ArbEngine,
     r#"[
         struct ArbStep { address router; address tokenIn; address tokenOut; uint24 fee; uint8 protocol; }
-        function executeArb(uint256 amountIn, uint256 minProfit, ArbStep[] calldata steps) external payable returns (uint256 amountOut)
+        function executeArb(uint256 amountIn, ArbStep[] calldata steps, uint256 minProfit) external payable returns (uint256 amountOut)
     ]"#
 );
 
@@ -37,7 +37,7 @@ pub async fn execute_transaction(
     let min_profit = U256::zero();
 
     // 2. 构建合约调用 (FunctionCall)
-    let call = contract.execute_arb(amount_in, min_profit, steps);
+    let call = contract.execute_arb(amount_in, steps, min_profit);
 
     // 3. 获取当前 BaseFee 并计算 EIP-1559 费用
     let block = client
