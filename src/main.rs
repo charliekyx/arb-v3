@@ -529,7 +529,8 @@ fn get_v3_amount_out_local(
     pool: &PoolConfig,
     state: &CachedPoolState,
 ) -> Result<U256> {
-    if amount_in.is_zero() || state.liquidity == 0 {
+    // [FIX] 增加 tick_spacing == 0 的检查，防止 Panic
+    if amount_in.is_zero() || state.liquidity == 0 || state.tick_spacing == 0 {
         return Ok(U256::zero());
     }
 
@@ -1121,7 +1122,18 @@ async fn main() -> Result<()> {
 
         let (fee, tick_spacing, pool_fee) = match proto_code {
             2 => (0, cfg.tick_spacing.unwrap_or(0), cfg.pool_fee.unwrap_or(0)),
-            _ => (cfg.fee.unwrap_or(3000), 0, 0),
+            _ => {
+                // [FIX] Uniswap V3: 根据 Fee 推导 Tick Spacing
+                let f = cfg.fee.unwrap_or(3000);
+                let ts = match f {
+                    100 => 1,     // 0.01% -> 1
+                    500 => 10,    // 0.05% -> 10
+                    3000 => 60,   // 0.3%  -> 60
+                    10000 => 200, // 1%    -> 200
+                    _ => 60,      // Default fallback
+                };
+                (f, ts, 0)
+            }
         };
 
         let p_config = PoolConfig {
