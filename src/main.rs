@@ -735,11 +735,11 @@ async fn update_all_pools(
             let word_pos = (cached_tick >> 8) as i16;
 
             let v3_pool = ICLPool::new(address, provider.clone());
-            multicall.add_call(v3_pool.slot_0(), false);
-            multicall.add_call(v3_pool.liquidity(), false);
-            multicall.add_call(v3_pool.tick_bitmap(word_pos), false); // Current word
-            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_add(1)), false); // Word above
-            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_sub(1)), false); // Word below
+            multicall.add_call(v3_pool.slot_0(), true);
+            multicall.add_call(v3_pool.liquidity(), true);
+            multicall.add_call(v3_pool.tick_bitmap(word_pos), true); // Current word
+            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_add(1)), true); // Word above
+            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_sub(1)), true); // Word below
 
             pre_updates.push(PoolPreUpdateData { pool, word_pos });
         }
@@ -837,7 +837,7 @@ async fn update_all_pools(
 
                     let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
                     for &t in &ticks_to_fetch {
-                        multicall2.add_call(v3_pool.ticks(t), false);
+                        multicall2.add_call(v3_pool.ticks(t), true);
                     }
 
                     total_ticks_to_fetch += ticks_to_fetch.len();
