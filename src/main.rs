@@ -4,6 +4,7 @@ use cocoon::Cocoon;
 use dashmap::DashMap;
 
 use ethers::{
+    abi::Tokenizable,
     prelude::*,
     types::{Address, I256, U256},
     utils::{format_ether, format_units, parse_ether, parse_units},
@@ -553,10 +554,13 @@ fn get_v3_amount_out_local(
             if initialized {
                 // 如果本地没有 Tick 数据，则无法继续计算，必须报错（或者返回当前计算结果）
                 // 稳健策略：返回 Error 让上层放弃此路径
-                let liquidity_net = state
-                    .ticks
-                    .get(&next_tick)
-                    .ok_or_else(|| anyhow!("Tick data missing for tick: {}", next_tick))?;
+                let liquidity_net = state.ticks.get(&next_tick).ok_or_else(|| {
+                    warn!(
+                        "MISSING TICK DATA: Pool {} needs tick {}",
+                        pool.name, next_tick
+                    );
+                    anyhow!("Tick data missing for tick: {}", next_tick)
+                })?;
 
                 if zero_for_one {
                     current_tick = next_tick - 1;
@@ -716,82 +720,131 @@ async fn update_all_pools(
         }
 
         let results = match multicall.call_raw().await {
-            Ok(r) => Arc::new(r),
+            Ok(r) => r,
             Err(e) => {
                 warn!("V3 Multicall failed: {:?}", e);
                 return;
             }
         };
 
-        // Now, process the results and fetch tick data concurrently
-        stream::iter(pools_to_update.into_iter().enumerate())
-            .for_each_concurrent(50, |(i, pool)| {
-                let provider = provider.clone();
-                let cache = cache.clone();
-                let results = results.clone();
-                async move {
-                    let slot0_bytes = results.get(i * 2).cloned();
-                    let liquidity_bytes = results.get(i * 2 + 1).cloned();
+        // Prepare Multicall 2 for Ticks and Bitmap
+        let Ok(mut multicall2) = Multicall::new(provider.clone(), Some(multicall_address)).await
+        else {
+            return;
+        };
 
-                    if let (Some(sb), Some(lb)) = (slot0_bytes.as_ref(), liquidity_bytes.as_ref()) {
-                        let v3_pool =
-                            ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+        struct PoolUpdateData<'a> {
+            pool: &'a PoolConfig,
+            slot0: (U256, i32, u16, u16, u16, bool),
+            liquidity: u128,
+            word_pos: i16,
+            ticks_to_fetch: Vec<i32>,
+        }
+        let mut updates = Vec::new();
 
-                        if let (Ok(slot0_token), Ok(liq_token)) = (sb, lb) {
-                            if let (
-                                Ok((sqrt_price_x96, current_tick, _, _, _, _)),
-                                Some(liq_val),
-                            ) = (
-                                <(U256, i32, u16, u16, u16, bool) as ethers::abi::Tokenizable>::from_token(slot0_token.clone()),
-                                liq_token.clone().into_uint(),
-                            ) {
-                                let liq: u128 = liq_val.as_u128();
-                                let tick_spacing = pool.tick_spacing;
+        for (i, pool) in pools_to_update.iter().enumerate() {
+            let slot0_result = &results[i * 2];
+            let liq_result = &results[i * 2 + 1];
 
-                                // --- Tick data fetching logic (remains concurrent per-pool after initial data is fetched) ---
-                                let mut ticks_map: HashMap<i32, i128> = HashMap::new();
-                                let mut bitmap_map = HashMap::new();
-                                let word_pos = (current_tick >> 8) as i16;
+            if let (Ok(slot0_token), Ok(liq_token)) = (slot0_result, liq_result) {
+                if let (Ok(slot0), Some(liq_val)) = (
+                    <(U256, i32, u16, u16, u16, bool) as ethers::abi::Tokenizable>::from_token(
+                        slot0_token.clone(),
+                    ),
+                    liq_token.clone().into_uint(),
+                ) {
+                    let current_tick = slot0.1;
+                    let tick_spacing = pool.tick_spacing;
+                    let liquidity = liq_val.as_u128();
 
-                                if let Ok(bitmap) = v3_pool.tick_bitmap(word_pos).call().await {
-                                    bitmap_map.insert(word_pos, bitmap);
-                                    let ticks_to_fetch = vec![
-                                        (current_tick / tick_spacing) * tick_spacing,
-                                        ((current_tick / tick_spacing) + 1) * tick_spacing,
-                                        ((current_tick / tick_spacing) - 1) * tick_spacing,
-                                    ];
-                                    for t in ticks_to_fetch {
-                                        if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
-                                            v3_pool.ticks(t).call().await
-                                        {
-                                            if initialized {
-                                                ticks_map.insert(t, liquidity_net);
-                                            }
-                                        }
-                                    }
-                                }
-                                // --- End tick data fetching ---
+                    // Fix Negative Division and Expand Range
+                    let base_index = if current_tick >= 0 {
+                        current_tick / tick_spacing
+                    } else {
+                        (current_tick - tick_spacing + 1) / tick_spacing
+                    };
 
-                                cache.insert(
-                                    get_pool_address(pool).unwrap(),
-                                    CachedPoolState {
-                                        block_number: current_block,
-                                        reserve0: 0,
-                                        reserve1: 0,
-                                        sqrt_price_x96,
-                                        tick: current_tick,
-                                        liquidity: liq,
-                                        tick_spacing,
-                                        ticks: ticks_map,
-                                        tick_bitmap: bitmap_map,
-                                    },
-                                );
-                            }
+                    let mut ticks_to_fetch = Vec::new();
+                    // Expand range to +/- 3 to reduce blind spots
+                    for offset in -3..=3 {
+                        ticks_to_fetch.push((base_index + offset) * tick_spacing);
+                    }
+
+                    let word_pos = (current_tick >> 8) as i16;
+                    let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+
+                    multicall2.add_call(v3_pool.tick_bitmap(word_pos), false);
+                    for &t in &ticks_to_fetch {
+                        multicall2.add_call(v3_pool.ticks(t), false);
+                    }
+
+                    updates.push(PoolUpdateData {
+                        pool,
+                        slot0,
+                        liquidity,
+                        word_pos,
+                        ticks_to_fetch,
+                    });
+                }
+            }
+        }
+
+        if updates.is_empty() {
+            return;
+        }
+
+        let results2 = match multicall2.call_raw().await {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("V3 Multicall 2 failed: {:?}", e);
+                return;
+            }
+        };
+
+        let mut res_idx = 0;
+        for update in updates {
+            let mut ticks_map = HashMap::new();
+            let mut bitmap_map = HashMap::new();
+
+            // 1. Bitmap
+            if let Some(Ok(token)) = results2.get(res_idx) {
+                if let Some(bitmap) = token.clone().into_uint() {
+                    bitmap_map.insert(update.word_pos, bitmap);
+                }
+            }
+            res_idx += 1;
+
+            // 2. Ticks
+            for &t in &update.ticks_to_fetch {
+                if let Some(Ok(token)) = results2.get(res_idx) {
+                    // Tuple: (liquidityGross, liquidityNet, feeGrowthOutside0X128, feeGrowthOutside1X128, tickCumulativeOutside, secondsPerLiquidityOutsideX128, secondsOutside, initialized)
+                    type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                    if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
+                        TickInfo::from_token(token.clone())
+                    {
+                        if initialized {
+                            ticks_map.insert(t, liquidity_net);
                         }
                     }
                 }
-            })
-            .await;
+                res_idx += 1;
+            }
+
+            cache.insert(
+                get_pool_address(update.pool).unwrap(),
+                CachedPoolState {
+                    block_number: current_block,
+                    reserve0: 0,
+                    reserve1: 0,
+                    sqrt_price_x96: update.slot0.0,
+                    tick: update.slot0.1,
+                    liquidity: update.liquidity,
+                    tick_spacing: update.pool.tick_spacing,
+                    ticks: ticks_map,
+                    tick_bitmap: bitmap_map,
+                },
+            );
+        }
     };
 
     // Run V2 and V3 updates in parallel
