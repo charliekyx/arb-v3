@@ -13,7 +13,6 @@ abigen!(
     ]"#
 );
 
-/// 生产级交易执行函数
 pub async fn execute_transaction(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     contract_address: Address,
@@ -66,9 +65,9 @@ pub async fn execute_transaction(
         ), // Fallback
     };
 
-    let base_fee = block.base_fee_per_gas.unwrap_or_default();
-    // let priority_fee = ethers::utils::parse_units("0.05", "gwei").unwrap();
-    // let max_fee = (base_fee * 2) + priority_fee;
+    let _base_fee = block.base_fee_per_gas.unwrap_or_default(); // Keep for potential future use
+                                                                // let priority_fee = ethers::utils::parse_units("0.05", "gwei").unwrap();
+                                                                // let max_fee = (base_fee * 2) + priority_fee;
 
     // 4. 模拟执行 (Estimate Gas)
     let estimated_gas: U256 = match call.estimate_gas().await {

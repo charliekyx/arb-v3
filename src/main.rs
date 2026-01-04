@@ -13,6 +13,7 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env,
     fs::{self, File, OpenOptions},
     io::Write,
@@ -24,7 +25,9 @@ use std::{
     time::Duration,
 };
 use tracing::{error, info, warn};
-use uniswap_v3_math::tick_math;
+use uniswap_v3_math::{
+    swap_math::compute_swap_step, tick_bitmap::next_initialized_tick_within_one_word, tick_math,
+};
 
 // 引入 Execution 模块
 mod execution;
@@ -52,6 +55,11 @@ struct CachedPoolState {
     liquidity: u128,
     tick: i32,
     tick_spacing: i32,
+    // [Prod Ready]: 存储 Tick 信息
+    // map: tick_index -> liquidity_net (该 tick 上流动性的增减量)
+    ticks: HashMap<i32, i128>,
+    // map: word_pos -> bitmap (用于快速查找下一个 tick)
+    tick_bitmap: HashMap<i16, U256>,
 }
 
 // Global cache to store pool state. Key: Pool Address
@@ -146,6 +154,8 @@ abigen!(
         function liquidity() external view returns (uint128)
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
         function token0() external view returns (address)
+        function tickBitmap(int16 wordPosition) external view returns (uint256)
+        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)
     ]"#;
 
     // Uniswap V2 是行业标准。绝大多数 V2 类 DEX（如 BaseSwap, SushiSwap, AlienBase）都完全复制了 Uniswap V2 的接口。
@@ -480,49 +490,99 @@ fn get_v2_amount_out_local(
     }
 }
 
+fn add_delta(x: u128, y: i128) -> Result<u128> {
+    if y < 0 {
+        let z = (-y) as u128;
+        if z > x {
+            return Err(anyhow!("Liquidity underflow"));
+        }
+        Ok(x - z)
+    } else {
+        Ok(x + (y as u128))
+    }
+}
+
 // Local V3 calculation (Math only, using uniswap_v3_math)
 // NOTE: This assumes swap does not cross tick boundaries (Small amounts).
 // For full production, you must implement step-by-step swap within ticks.
 fn get_v3_amount_out_local(
     amount_in: U256,
-    sqrt_price_x96: U256,
-    liquidity: u128,
-    zero_for_one: bool,
-    fee_pips: u32, // fee in pips (e.g., 3000 for 0.3%)
+    token_in: Address,
+    token_out: Address,
+    pool: &PoolConfig,
+    state: &CachedPoolState,
 ) -> Result<U256> {
-    if liquidity == 0 {
+    if amount_in.is_zero() || state.liquidity == 0 {
         return Ok(U256::zero());
     }
 
-    // Convert U256 to library types if needed, or implement simplified formula:
-    // This is a simplified "single tick" swap simulation for speed.
-    // Real prod bots sync the tick bitmap to handle large swaps.
+    // zero_for_one: token0 -> token1 (价格向下, tick 变小)
+    let zero_for_one = token_in < token_out;
 
-    // Calculate Next SqrtPrice
-    // formula: new_sqrt_price = sqrt_price + (amount_in / liquidity) ... roughly
+    let mut current_sqrt_price_x96 = state.sqrt_price_x96;
+    let mut current_tick = state.tick;
+    let mut current_liquidity = state.liquidity;
+    let mut amount_remaining = I256::from_raw(amount_in);
+    let mut amount_calculated = I256::zero();
+    let fee_pips = pool.fee as u32;
 
-    // For this example, let's use a simplified constant product estimation for small moves
-    // OR use the library `uniswap_v3_math::swap_math::compute_swap_step`
-
-    let price_limit = if zero_for_one {
-        tick_math::MIN_SQRT_RATIO + U256::one()
-    } else {
-        tick_math::MAX_SQRT_RATIO - U256::one()
-    };
-
-    let amount_remaining = I256::from_raw(amount_in);
-
-    // Call the library function (simulated call)
-    let (_amount_in_used, amount_out_received, _next_price, _next_liquidity) =
-        uniswap_v3_math::swap_math::compute_swap_step(
-            sqrt_price_x96,
-            price_limit,
-            liquidity,
-            amount_remaining,
-            fee_pips,
+    while amount_remaining > I256::zero() {
+        let (next_tick, initialized) = next_initialized_tick_within_one_word(
+            &state.tick_bitmap,
+            current_tick,
+            state.tick_spacing,
+            zero_for_one,
         )?;
 
-    Ok(amount_out_received)
+        let sqrt_price_limit_x96 = tick_math::get_sqrt_ratio_at_tick(next_tick)?;
+
+        let (sqrt_price_next_x96, amount_in_consumed, amount_out_received, _fee_amount) =
+            compute_swap_step(
+                current_sqrt_price_x96,
+                sqrt_price_limit_x96,
+                current_liquidity,
+                amount_remaining,
+                fee_pips,
+            )?;
+
+        current_sqrt_price_x96 = sqrt_price_next_x96;
+        amount_remaining -= I256::from_raw(amount_in_consumed);
+        amount_calculated -= I256::from_raw(amount_out_received);
+
+        if current_sqrt_price_x96 == sqrt_price_limit_x96 {
+            if initialized {
+                // 如果本地没有 Tick 数据，则无法继续计算，必须报错（或者返回当前计算结果）
+                // 稳健策略：返回 Error 让上层放弃此路径
+                let liquidity_net = state
+                    .ticks
+                    .get(&next_tick)
+                    .ok_or_else(|| anyhow!("Tick data missing for tick: {}", next_tick))?;
+
+                if zero_for_one {
+                    current_tick = next_tick - 1;
+                    current_liquidity = add_delta(current_liquidity, -liquidity_net)?;
+                } else {
+                    current_tick = next_tick;
+                    current_liquidity = add_delta(current_liquidity, *liquidity_net)?;
+                }
+            } else {
+                current_tick = if zero_for_one {
+                    next_tick - 1
+                } else {
+                    next_tick
+                };
+            }
+        } else {
+            let _ = tick_math::get_tick_at_sqrt_ratio(current_sqrt_price_x96)?;
+            break;
+        }
+
+        if current_liquidity == 0 {
+            break;
+        }
+    }
+
+    Ok(amount_calculated.abs().into_raw())
 }
 
 // The Main Pricing Function: Reads from Memory Cache
@@ -566,14 +626,8 @@ async fn get_amount_out(
         ))
     } else {
         // === V3 Logic ===
-        let zero_for_one = token_in < token_out;
-        get_v3_amount_out_local(
-            amount_in,
-            state.sqrt_price_x96,
-            state.liquidity,
-            zero_for_one,
-            pool.fee as u32,
-        )
+        // 使用新的 V3 本地计算逻辑
+        get_v3_amount_out_local(amount_in, token_in, token_out, pool, &state)
     }
 }
 
@@ -585,72 +639,163 @@ async fn update_all_pools(
     cache: PoolCache,
     current_block: U64,
 ) {
-    // We only update pools that we actually use.
-    // Optimization: In prod, use `Multicall` contract to fetch 100+ pools in 1 RPC call.
-    // Here we use concurrent fetches which is still faster than serial.
+    // --- V2 and V3/CL pools require different calls, so we can handle them separately ---
 
-    stream::iter(pools)
-        .for_each_concurrent(50, |pool| {
-            // Fetch 50 pools in parallel
-            let provider_clone = provider.clone();
-            let cache_clone = cache.clone();
-            async move {
-                // Determine the correct address for the pool
-                let Some(address) = get_pool_address(pool) else {
-                    // Skip if the pool has no address for its protocol type
-                    return;
-                };
-
-                // Skip if already updated this block
-                if let Some(s) = cache_clone.get(&address) {
-                    if s.block_number == current_block {
-                        return;
-                    }
-                }
-
-                if pool.protocol == 1 {
-                    // Fetch V2 Reserves
-                    let pair = IUniswapV2Pair::new(address, provider_clone);
-                    if let Ok((r0, r1, _)) = pair.get_reserves().call().await {
-                        cache_clone.insert(
-                            address,
-                            CachedPoolState {
-                                block_number: current_block,
-                                reserve0: r0,
-                                reserve1: r1,
-                                sqrt_price_x96: U256::zero(),
-                                liquidity: 0,
-                                tick: 0,
-                                tick_spacing: 0,
-                            },
-                        );
-                    }
-                } else {
-                    // Fetch V3 Slot0 and Liquidity
-                    // NOTE: Use ICLPool which is already defined in your abigen! block
-                    let v3_pool = ICLPool::new(address, provider_clone);
-                    // Run both requests in parallel
-                    let f1 = v3_pool.slot_0();
-                    let f2 = v3_pool.liquidity();
-
-                    if let (Ok(slot0_data), Ok(liq)) = tokio::join!(f1, f2) {
-                        cache_clone.insert(
-                            address,
-                            CachedPoolState {
-                                block_number: current_block,
-                                reserve0: 0,
-                                reserve1: 0,
-                                sqrt_price_x96: slot0_data.0, // sqrtPriceX96
-                                tick: slot0_data.1,           // tick
-                                liquidity: liq,
-                                tick_spacing: pool.tick_spacing, // from config
-                            },
-                        );
-                    }
-                }
+    // 1. Handle V2 pools with concurrent calls (they are few and simple)
+    let v2_pools: Vec<_> = pools.iter().filter(|p| p.protocol == 1).collect();
+    let v2_stream = stream::iter(v2_pools).for_each_concurrent(50, |pool| {
+        let provider = provider.clone();
+        let cache = cache.clone();
+        async move {
+            let Some(address) = get_pool_address(pool) else {
+                return;
+            };
+            if cache
+                .get(&address)
+                .map_or(false, |s| s.block_number == current_block)
+            {
+                return;
             }
-        })
-        .await;
+
+            let pair = IUniswapV2Pair::new(address, provider);
+            if let Ok((r0, r1, _)) = pair.get_reserves().call().await {
+                cache.insert(
+                    address,
+                    CachedPoolState {
+                        block_number: current_block,
+                        reserve0: r0,
+                        reserve1: r1,
+                        sqrt_price_x96: U256::zero(),
+                        liquidity: 0,
+                        tick: 0,
+                        tick_spacing: 0,
+                        ticks: HashMap::new(),
+                        tick_bitmap: HashMap::new(),
+                    },
+                );
+            }
+        }
+    });
+
+    // 2. Handle all V3/CL pools with a single Multicall for base data (slot0, liquidity)
+    let v3_pools: Vec<_> = pools.iter().filter(|p| p.protocol != 1).collect();
+    let v3_task = async {
+        // Initialize Multicall. It might need a specific address on some chains.
+        // Base Mainnet uses the standard Multicall3 address.
+        // https://basescan.org/address/0xcA11bde05977b3631167028862bE2a173976CA11#code
+        let multicall_address = "0xcA11bde05977b3631167028862bE2a173976CA11"
+            .parse::<Address>()
+            .unwrap();
+        let Ok(mut multicall) = Multicall::new(provider.clone(), Some(multicall_address)).await
+        else {
+            error!("Failed to create Multicall instance");
+            return;
+        };
+
+        let mut pools_to_update = Vec::new();
+
+        for pool in v3_pools {
+            let Some(address) = get_pool_address(pool) else {
+                continue;
+            };
+            if cache
+                .get(&address)
+                .map_or(false, |s| s.block_number == current_block)
+            {
+                continue;
+            }
+
+            let v3_pool = ICLPool::new(address, provider.clone());
+            multicall.add_call(v3_pool.slot_0(), false);
+            multicall.add_call(v3_pool.liquidity(), false);
+            pools_to_update.push(pool);
+        }
+
+        if pools_to_update.is_empty() {
+            return;
+        }
+
+        let results = match multicall.call_raw().await {
+            Ok(r) => Arc::new(r),
+            Err(e) => {
+                warn!("V3 Multicall failed: {:?}", e);
+                return;
+            }
+        };
+
+        // Now, process the results and fetch tick data concurrently
+        stream::iter(pools_to_update.into_iter().enumerate())
+            .for_each_concurrent(50, |(i, pool)| {
+                let provider = provider.clone();
+                let cache = cache.clone();
+                let results = results.clone();
+                async move {
+                    let slot0_bytes = results.get(i * 2).cloned();
+                    let liquidity_bytes = results.get(i * 2 + 1).cloned();
+
+                    if let (Some(sb), Some(lb)) = (slot0_bytes.as_ref(), liquidity_bytes.as_ref()) {
+                        let v3_pool =
+                            ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+
+                        if let (Ok(slot0_token), Ok(liq_token)) = (sb, lb) {
+                            if let (
+                                Ok((sqrt_price_x96, current_tick, _, _, _, _)),
+                                Some(liq_val),
+                            ) = (
+                                <(U256, i32, u16, u16, u16, bool) as ethers::abi::Tokenizable>::from_token(slot0_token.clone()),
+                                liq_token.clone().into_uint(),
+                            ) {
+                                let liq: u128 = liq_val.as_u128();
+                                let tick_spacing = pool.tick_spacing;
+
+                                // --- Tick data fetching logic (remains concurrent per-pool after initial data is fetched) ---
+                                let mut ticks_map: HashMap<i32, i128> = HashMap::new();
+                                let mut bitmap_map = HashMap::new();
+                                let word_pos = (current_tick >> 8) as i16;
+
+                                if let Ok(bitmap) = v3_pool.tick_bitmap(word_pos).call().await {
+                                    bitmap_map.insert(word_pos, bitmap);
+                                    let ticks_to_fetch = vec![
+                                        (current_tick / tick_spacing) * tick_spacing,
+                                        ((current_tick / tick_spacing) + 1) * tick_spacing,
+                                        ((current_tick / tick_spacing) - 1) * tick_spacing,
+                                    ];
+                                    for t in ticks_to_fetch {
+                                        if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
+                                            v3_pool.ticks(t).call().await
+                                        {
+                                            if initialized {
+                                                ticks_map.insert(t, liquidity_net);
+                                            }
+                                        }
+                                    }
+                                }
+                                // --- End tick data fetching ---
+
+                                cache.insert(
+                                    get_pool_address(pool).unwrap(),
+                                    CachedPoolState {
+                                        block_number: current_block,
+                                        reserve0: 0,
+                                        reserve1: 0,
+                                        sqrt_price_x96,
+                                        tick: current_tick,
+                                        liquidity: liq,
+                                        tick_spacing,
+                                        ticks: ticks_map,
+                                        tick_bitmap: bitmap_map,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            })
+            .await;
+    };
+
+    // Run V2 and V3 updates in parallel
+    tokio::join!(v2_stream, v3_task);
 }
 
 async fn get_price_in_weth(
