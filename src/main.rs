@@ -471,6 +471,22 @@ fn send_email_alert(subject: &str, body: &str) {
     }
 }
 
+fn get_initialized_ticks_from_bitmap(word_pos: i16, bitmap: U256) -> Vec<i32> {
+    let mut ticks = Vec::new();
+    if bitmap.is_zero() {
+        return ticks;
+    }
+    for i in 0..256 {
+        if (bitmap >> i) & U256::one() != U256::zero() {
+            // Calculate the tick index from the word position and the bit position.
+            // This is the actual tick index.
+            let tick = (word_pos as i32) * 256 + i as i32;
+            ticks.push(tick);
+        }
+    }
+    ticks
+}
+
 // Local V2 calculation (Math only, no IPC)
 fn get_v2_amount_out_local(
     amount_in: U256,
@@ -696,9 +712,14 @@ async fn update_all_pools(
             return;
         };
 
-        let mut pools_to_update = Vec::new();
+        let mut pre_updates = Vec::new();
 
-        for pool in v3_pools {
+        struct PoolPreUpdateData<'a> {
+            pool: &'a PoolConfig,
+            word_pos: i16,
+        }
+
+        for pool in &v3_pools {
             let Some(address) = get_pool_address(pool) else {
                 continue;
             };
@@ -709,20 +730,28 @@ async fn update_all_pools(
                 continue;
             }
 
+            // Use cached tick to determine which bitmap words to fetch. Fallback to 0.
+            let cached_tick = cache.get(&address).map_or(0, |s| s.value().tick);
+            let word_pos = (cached_tick >> 8) as i16;
+
             let v3_pool = ICLPool::new(address, provider.clone());
             multicall.add_call(v3_pool.slot_0(), false);
             multicall.add_call(v3_pool.liquidity(), false);
-            pools_to_update.push(pool);
+            multicall.add_call(v3_pool.tick_bitmap(word_pos), false); // Current word
+            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_add(1)), false); // Word above
+            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_sub(1)), false); // Word below
+
+            pre_updates.push(PoolPreUpdateData { pool, word_pos });
         }
 
-        if pools_to_update.is_empty() {
+        if pre_updates.is_empty() {
             return;
         }
 
         let results = match multicall.call_raw().await {
             Ok(r) => r,
             Err(e) => {
-                warn!("V3 Multicall failed: {:?}", e);
+                warn!("V3 Multicall 1 (Slot0/Liq/Bitmaps) failed: {:?}", e);
                 return;
             }
         };
@@ -730,94 +759,123 @@ async fn update_all_pools(
         // Prepare Multicall 2 for Ticks and Bitmap
         let Ok(mut multicall2) = Multicall::new(provider.clone(), Some(multicall_address)).await
         else {
+            error!("Failed to create Multicall 2");
             return;
         };
 
-        struct PoolUpdateData<'a> {
+        struct PoolFinalUpdateData<'a> {
             pool: &'a PoolConfig,
             slot0: (U256, i32, u16, u16, u16, bool),
             liquidity: u128,
-            word_pos: i16,
+            bitmaps: HashMap<i16, U256>,
             ticks_to_fetch: Vec<i32>,
         }
-        let mut updates = Vec::new();
+        let mut final_updates = Vec::new();
+        let mut total_ticks_to_fetch = 0;
 
-        for (i, pool) in pools_to_update.iter().enumerate() {
-            let slot0_result = &results[i * 2];
-            let liq_result = &results[i * 2 + 1];
+        for (i, pre_update) in pre_updates.iter().enumerate() {
+            let pool = pre_update.pool;
+            let base_idx = i * 5; // 5 calls per pool in MC1
 
-            if let (Ok(slot0_token), Ok(liq_token)) = (slot0_result, liq_result) {
+            let slot0_res = &results[base_idx];
+            let liq_res = &results[base_idx + 1];
+            let bitmap_res = &results[base_idx + 2];
+            let bitmap_plus_1_res = &results[base_idx + 3];
+            let bitmap_minus_1_res = &results[base_idx + 4];
+
+            if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
                 if let (Ok(slot0), Some(liq_val)) = (
-                    <(U256, i32, u16, u16, u16, bool) as ethers::abi::Tokenizable>::from_token(
-                        slot0_token.clone(),
-                    ),
+                    <(U256, i32, u16, u16, u16, bool)>::from_token(slot0_token.clone()),
                     liq_token.clone().into_uint(),
                 ) {
-                    let current_tick = slot0.1;
-                    let tick_spacing = pool.tick_spacing;
                     let liquidity = liq_val.as_u128();
+                    let current_tick = slot0.1;
+                    let new_word_pos = (current_tick >> 8) as i16;
 
-                    // Fix Negative Division and Expand Range
-                    let base_index = if current_tick >= 0 {
-                        current_tick / tick_spacing
-                    } else {
-                        (current_tick - tick_spacing + 1) / tick_spacing
-                    };
-
-                    let mut ticks_to_fetch = Vec::new();
-                    // Expand range to +/- 3 to reduce blind spots
-                    for offset in -3..=3 {
-                        ticks_to_fetch.push((base_index + offset) * tick_spacing);
+                    // Check if our pre-fetched bitmaps are still relevant
+                    if (new_word_pos - pre_update.word_pos).abs() > 1 {
+                        warn!("Pool {} tick moved across more than one word. Cached: {}, New: {}. Skipping tick fetch for this block.", pool.name, pre_update.word_pos, new_word_pos);
+                        cache.insert(
+                            get_pool_address(pool).unwrap(),
+                            CachedPoolState {
+                                block_number: current_block,
+                                reserve0: 0,
+                                reserve1: 0,
+                                sqrt_price_x96: slot0.0,
+                                tick: current_tick,
+                                liquidity,
+                                tick_spacing: pool.tick_spacing,
+                                ticks: HashMap::new(), // No tick data
+                                tick_bitmap: HashMap::new(),
+                            },
+                        );
+                        continue;
                     }
 
-                    let word_pos = (current_tick >> 8) as i16;
-                    let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+                    let mut bitmaps = HashMap::new();
+                    let mut all_ticks_in_bitmaps = Vec::new();
 
-                    multicall2.add_call(v3_pool.tick_bitmap(word_pos), false);
+                    let word_positions = [
+                        pre_update.word_pos,
+                        pre_update.word_pos.wrapping_add(1),
+                        pre_update.word_pos.wrapping_sub(1),
+                    ];
+                    let bitmap_results = [bitmap_res, bitmap_plus_1_res, bitmap_minus_1_res];
+
+                    for (j, &word_pos) in word_positions.iter().enumerate() {
+                        if let Ok(bitmap_token) = bitmap_results[j] {
+                            if let Some(bitmap_val) = bitmap_token.clone().into_uint() {
+                                bitmaps.insert(word_pos, bitmap_val);
+                                all_ticks_in_bitmaps.extend(get_initialized_ticks_from_bitmap(
+                                    word_pos, bitmap_val,
+                                ));
+                            }
+                        }
+                    }
+
+                    let ticks_to_fetch: Vec<i32> = all_ticks_in_bitmaps;
+
+                    let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
                     for &t in &ticks_to_fetch {
                         multicall2.add_call(v3_pool.ticks(t), false);
                     }
 
-                    updates.push(PoolUpdateData {
+                    total_ticks_to_fetch += ticks_to_fetch.len();
+                    final_updates.push(PoolFinalUpdateData {
                         pool,
                         slot0,
                         liquidity,
-                        word_pos,
+                        bitmaps,
                         ticks_to_fetch,
                     });
                 }
             }
         }
 
-        if updates.is_empty() {
+        if final_updates.is_empty() {
             return;
         }
+
+        info!(
+            "Fetching {} total ticks across {} pools in Multicall 2",
+            total_ticks_to_fetch,
+            final_updates.len()
+        );
 
         let results2 = match multicall2.call_raw().await {
             Ok(r) => r,
             Err(e) => {
-                warn!("V3 Multicall 2 failed: {:?}", e);
+                warn!("V3 Multicall 2 (Ticks) failed: {:?}", e);
                 return;
             }
         };
 
+        // 3. Final Cache Update
         let mut res_idx = 0;
-        for update in updates {
+        for update in final_updates {
             let mut ticks_map = HashMap::new();
-            let mut bitmap_map = HashMap::new();
-
-            // 1. Bitmap
-            if let Some(Ok(token)) = results2.get(res_idx) {
-                if let Some(bitmap) = token.clone().into_uint() {
-                    bitmap_map.insert(update.word_pos, bitmap);
-                }
-            }
-            res_idx += 1;
-
-            // 2. Ticks
             for &t in &update.ticks_to_fetch {
                 if let Some(Ok(token)) = results2.get(res_idx) {
-                    // Tuple: (liquidityGross, liquidityNet, feeGrowthOutside0X128, feeGrowthOutside1X128, tickCumulativeOutside, secondsPerLiquidityOutsideX128, secondsOutside, initialized)
                     type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
                     if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
                         TickInfo::from_token(token.clone())
@@ -836,12 +894,12 @@ async fn update_all_pools(
                     block_number: current_block,
                     reserve0: 0,
                     reserve1: 0,
-                    sqrt_price_x96: update.slot0.0,
-                    tick: update.slot0.1,
-                    liquidity: update.liquidity,
+                    sqrt_price_x96: update.slot0.0, // from slot0
+                    tick: update.slot0.1,           // from slot0
+                    liquidity: update.liquidity,    // from liquidity()
                     tick_spacing: update.pool.tick_spacing,
                     ticks: ticks_map,
-                    tick_bitmap: bitmap_map,
+                    tick_bitmap: update.bitmaps,
                 },
             );
         }
