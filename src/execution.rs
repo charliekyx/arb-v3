@@ -9,7 +9,7 @@ abigen!(
     ArbEngine,
     r#"[
         struct ArbStep { address router; address tokenIn; address tokenOut; uint24 fee; uint8 protocol; }
-        function executeArb(uint256 amountIn, ArbStep[] calldata steps, uint256 minProfit) external payable returns (uint256 amountOut)
+        function executeArb(uint256 amountIn, ArbStep[] calldata steps, uint256 minProfit) external returns (uint256 amountOut)
     ]"#
 );
 

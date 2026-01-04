@@ -33,7 +33,6 @@ interface IUniswapV2Router {
     ) external returns (uint[] memory amounts);
 }
 
-// --- Balancer 接口 ---
 interface IFlashLoanRecipient {
     function receiveFlashLoan(
         IERC20[] memory tokens,
@@ -113,7 +112,6 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
 
     receive() external payable {}
 
-    // --- 核心入口 ---
     function executeArb(
         uint256 borrowAmount,
         SwapStep[] calldata steps,
@@ -140,7 +138,6 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         );
     }
 
-    // --- 闪电贷回调 ---
     function receiveFlashLoan(
         IERC20[] memory tokens,
         uint256[] memory amounts,
@@ -159,18 +156,12 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         for (uint256 i = 0; i < params.steps.length; i++) {
             SwapStep memory step = params.steps[i];
 
-            // 1. 获取当前合约对 Router 的授权额度
             uint256 currentAllowance = IERC20(step.tokenIn).allowance(
                 address(this),
                 step.router
             );
-            // 2. 如果授权额度不足以支付当前金额，则进行授权
+
             if (currentAllowance < currentAmount) {
-                // To be fully compatible with non-standard tokens (like some older versions of USDT)
-                // that revert if you try to change a non-zero allowance to another non-zero value,
-                // we first reset the allowance to 0.
-                // This adds a one-time gas cost for the first trade with a pre-existing allowance,
-                // but makes the contract significantly more robust.
                 if (currentAllowance > 0) {
                     IERC20(step.tokenIn).approve(step.router, 0);
                 }
