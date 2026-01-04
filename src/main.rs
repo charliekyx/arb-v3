@@ -1448,43 +1448,37 @@ async fn main() -> Result<()> {
                             info!("{}", log_msg);
                             append_log_to_file(&log_msg);
 
-                            // 准备执行数据
-                            let gross_u256 = U256::from(best_gross_profit.as_u128());
                             let client_clone = client.clone();
-
-                            // [关键步骤] 数据转换：将 PoolConfig 列表转换为 execution 模块接受的元组列表
-                            // 格式: (PoolAddr, TokenIn, TokenOut, Fee, Protocol)
-                            // 这样 execution.rs 就不需要依赖 main.rs 中的 Struct 定义
-                            let pools_data: Vec<(Address, Address, Address, u32, u8)> = path
-                                .pools
-                                .iter()
-                                .enumerate()
-                                .map(|(i, p)| {
-                                    (
-                                        p.router,
-                                        path.tokens[i],     // 当前跳的输入代币
-                                        path.tokens[i + 1], // 当前跳的输出代币
-                                        p.fee,
-                                        p.protocol,
-                                    )
-                                })
-                                .collect();
 
                             // 异步提交交易
                             tokio::spawn(async move {
-                                // contract_address_exec 需要在 loop 外定义好:
-                                // let contract_address_exec = Address::from_str(&config.contract_address).unwrap();
+                                // [New] 构建 execute_transaction 需要的 pools_data
+                                let mut pools_data = Vec::new();
+                                for (i, pool) in path.pools.iter().enumerate() {
+                                    // 根据 path.tokens 确定输入输出 token，这在 multi-hop 中至关重要
+                                    let token_in = path.tokens[i];
+                                    let token_out = path.tokens[i + 1];
+                                    pools_data.push((
+                                        pool.router,
+                                        token_in,
+                                        token_out,
+                                        pool.fee,
+                                        pool.protocol,
+                                    ));
+                                }
+
+                                // [New] 调用执行函数
                                 match execute_transaction(
                                     client_clone,
-                                    contract_address_exec, // 确保这个变量被 async move 捕获
+                                    contract_address_exec,
                                     best_amount,
-                                    gross_u256,
+                                    U256::zero(), // expected_gross_profit (optional)
                                     pools_data,
-                                    provider,
+                                    provider.clone(),
                                 )
                                 .await
                                 {
-                                    Ok(tx) => info!("Tx Sent: {:?}", tx),
+                                    Ok(tx) => info!("Tx Broadcasted: {:?}", tx),
                                     Err(e) => error!("Tx Failed: {:?}", e),
                                 }
                             });

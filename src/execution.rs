@@ -34,6 +34,9 @@ pub async fn execute_transaction(
         .collect();
 
     let contract = ArbEngine::new(contract_address, client.clone());
+
+    // 建议：min_profit 不要写死为 0，最好作为参数传入。
+    // 这里暂时保持为 0 以确保先跑通，后续可以在 main.rs 里计算。
     let min_profit = U256::zero();
 
     // 2. 构建合约调用 (FunctionCall)
@@ -64,10 +67,6 @@ pub async fn execute_transaction(
             parse_units("0.05", "gwei")?.into(),
         ), // Fallback
     };
-
-    let _base_fee = block.base_fee_per_gas.unwrap_or_default(); // Keep for potential future use
-                                                                // let priority_fee = ethers::utils::parse_units("0.05", "gwei").unwrap();
-                                                                // let max_fee = (base_fee * 2) + priority_fee;
 
     // 4. 模拟执行 (Estimate Gas)
     let estimated_gas: U256 = match call.estimate_gas().await {
