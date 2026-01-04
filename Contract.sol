@@ -159,9 +159,23 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         for (uint256 i = 0; i < params.steps.length; i++) {
             SwapStep memory step = params.steps[i];
 
-            // 授权 Router (如果还没授权)
-            // 注意：生产环境建议owner提前approve好，省gas。这里为了方便保留。
-            // IERC20(step.tokenIn).approve(step.router, currentAmount);
+            // 1. 获取当前合约对 Router 的授权额度
+            uint256 currentAllowance = IERC20(step.tokenIn).allowance(
+                address(this),
+                step.router
+            );
+            // 2. 如果授权额度不足以支付当前金额，则进行授权
+            if (currentAllowance < currentAmount) {
+                // To be fully compatible with non-standard tokens (like some older versions of USDT)
+                // that revert if you try to change a non-zero allowance to another non-zero value,
+                // we first reset the allowance to 0.
+                // This adds a one-time gas cost for the first trade with a pre-existing allowance,
+                // but makes the contract significantly more robust.
+                if (currentAllowance > 0) {
+                    IERC20(step.tokenIn).approve(step.router, 0);
+                }
+                IERC20(step.tokenIn).approve(step.router, type(uint256).max);
+            }
 
             if (step.protocol == 1) {
                 // --- V2 (Aerodrome Classic) ---

@@ -1161,6 +1161,11 @@ async fn main() -> Result<()> {
         }
         pools.push(final_config);
 
+        info!(
+            "Validated Pool: {} | Token A: {:?} | Token B: {:?}",
+            cfg.name, token_a, token_b
+        );
+
         if proto_code == 2 {
             if let Some(q) = quoter_addr {
                 if probed_quoters.insert(q) {
