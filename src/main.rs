@@ -781,7 +781,7 @@ async fn update_all_pools(
 
                     // [FIXED] Expand tick fetching range to prevent MISSING TICK DATA errors
                     let mut ticks_to_fetch = Vec::new();
-                    for i in -4..=4 {
+                    for i in -1..=1 {
                         let index = (base_tick_index + i) * tick_spacing;
                         ticks_to_fetch.push(index);
                     }
