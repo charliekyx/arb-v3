@@ -153,7 +153,7 @@ abigen!(
         function tickSpacing() external view returns (int24)
         function fee() external view returns (uint24)
         function liquidity() external view returns (uint128)
-        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
         function token0() external view returns (address)
         function tickBitmap(int16 wordPosition) external view returns (uint256)
         function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)
@@ -753,7 +753,7 @@ async fn update_all_pools(
 
         struct PoolFinalUpdateData<'a> {
             pool: &'a PoolConfig,
-            slot0: (U256, i32, u16, u16, u16, bool),
+            slot0: (U256, i32, u16, u16, u16, u8, bool),
             liquidity: u128,
             ticks_to_fetch: Vec<i32>,
         }
@@ -765,7 +765,7 @@ async fn update_all_pools(
             let liq_res = &results[i * 2 + 1];
             if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
                 if let (Ok(slot0), Some(liq_val)) = (
-                    <(U256, i32, u16, u16, u16, bool)>::from_token(slot0_token.clone()),
+                    <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token.clone()),
                     liq_token.clone().into_uint(),
                 ) {
                     let liquidity = liq_val.as_u128();
