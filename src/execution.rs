@@ -45,7 +45,7 @@ pub async fn execute_transaction(
     let call = contract.execute_arb(amount_in, steps, min_profit);
 
     // 3. 获取当前 BaseFee 并计算 EIP-1559 费用
-    let block = client
+    let _block = client
         .provider()
         .get_block(BlockNumber::Latest)
         .await?

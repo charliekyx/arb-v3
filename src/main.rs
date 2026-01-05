@@ -713,12 +713,7 @@ async fn update_all_pools(
             return;
         };
 
-        let mut pre_updates = Vec::new();
-
-        struct PoolPreUpdateData<'a> {
-            pool: &'a PoolConfig,
-            word_pos: i16,
-        }
+        let mut pre_updates: Vec<&PoolConfig> = Vec::new();
 
         for pool in &v3_pools {
             let Some(address) = get_pool_address(pool) else {
@@ -731,18 +726,10 @@ async fn update_all_pools(
                 continue;
             }
 
-            // Use cached tick to determine which bitmap words to fetch. Fallback to 0.
-            let cached_tick = cache.get(&address).map_or(0, |s| s.value().tick);
-            let word_pos = (cached_tick >> 8) as i16;
-
             let v3_pool = ICLPool::new(address, provider.clone());
             multicall.add_call(v3_pool.slot_0(), true);
             multicall.add_call(v3_pool.liquidity(), true);
-            multicall.add_call(v3_pool.tick_bitmap(word_pos), true); // Current word
-            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_add(1)), true); // Word above
-            multicall.add_call(v3_pool.tick_bitmap(word_pos.wrapping_sub(1)), true); // Word below
-
-            pre_updates.push(PoolPreUpdateData { pool, word_pos });
+            pre_updates.push(pool);
         }
 
         if pre_updates.is_empty() {
@@ -768,22 +755,14 @@ async fn update_all_pools(
             pool: &'a PoolConfig,
             slot0: (U256, i32, u16, u16, u16, bool),
             liquidity: u128,
-            bitmaps: HashMap<i16, U256>,
             ticks_to_fetch: Vec<i32>,
         }
         let mut final_updates = Vec::new();
         let mut total_ticks_to_fetch = 0;
 
-        for (i, pre_update) in pre_updates.iter().enumerate() {
-            let pool = pre_update.pool;
-            let base_idx = i * 5; // 5 calls per pool in MC1
-
-            let slot0_res = &results[base_idx];
-            let liq_res = &results[base_idx + 1];
-            let bitmap_res = &results[base_idx + 2];
-            let bitmap_plus_1_res = &results[base_idx + 3];
-            let bitmap_minus_1_res = &results[base_idx + 4];
-
+        for (i, &pool) in pre_updates.iter().enumerate() {
+            let slot0_res = &results[i * 2];
+            let liq_res = &results[i * 2 + 1];
             if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
                 if let (Ok(slot0), Some(liq_val)) = (
                     <(U256, i32, u16, u16, u16, bool)>::from_token(slot0_token.clone()),
@@ -791,62 +770,31 @@ async fn update_all_pools(
                 ) {
                     let liquidity = liq_val.as_u128();
                     let current_tick = slot0.1;
-                    let new_word_pos = (current_tick >> 8) as i16;
+                    let tick_spacing = pool.tick_spacing;
 
-                    // Check if our pre-fetched bitmaps are still relevant
-                    if (new_word_pos - pre_update.word_pos).abs() > 1 {
-                        warn!("Pool {} tick moved across more than one word. Cached: {}, New: {}. Skipping tick fetch for this block.", pool.name, pre_update.word_pos, new_word_pos);
-                        cache.insert(
-                            get_pool_address(pool).unwrap(),
-                            CachedPoolState {
-                                block_number: current_block,
-                                reserve0: 0,
-                                reserve1: 0,
-                                sqrt_price_x96: slot0.0,
-                                tick: current_tick,
-                                liquidity,
-                                tick_spacing: pool.tick_spacing,
-                                ticks: HashMap::new(), // No tick data
-                                tick_bitmap: HashMap::new(),
-                            },
-                        );
-                        continue;
+                    // Calculate base tick index with correct floor division for negative numbers
+                    let base_tick_index = if current_tick >= 0 {
+                        current_tick / tick_spacing
+                    } else {
+                        (current_tick - tick_spacing + 1) / tick_spacing
+                    };
+
+                    // [FIXED] Expand tick fetching range to prevent MISSING TICK DATA errors
+                    let mut ticks_to_fetch = Vec::new();
+                    for i in -10..=10 {
+                        let index = (base_tick_index + i) * tick_spacing;
+                        ticks_to_fetch.push(index);
                     }
-
-                    let mut bitmaps = HashMap::new();
-                    let mut all_ticks_in_bitmaps = Vec::new();
-
-                    let word_positions = [
-                        pre_update.word_pos,
-                        pre_update.word_pos.wrapping_add(1),
-                        pre_update.word_pos.wrapping_sub(1),
-                    ];
-                    let bitmap_results = [bitmap_res, bitmap_plus_1_res, bitmap_minus_1_res];
-
-                    for (j, &word_pos) in word_positions.iter().enumerate() {
-                        if let Ok(bitmap_token) = bitmap_results[j] {
-                            if let Some(bitmap_val) = bitmap_token.clone().into_uint() {
-                                bitmaps.insert(word_pos, bitmap_val);
-                                all_ticks_in_bitmaps.extend(get_initialized_ticks_from_bitmap(
-                                    word_pos, bitmap_val,
-                                ));
-                            }
-                        }
-                    }
-
-                    let ticks_to_fetch: Vec<i32> = all_ticks_in_bitmaps;
 
                     let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
                     for &t in &ticks_to_fetch {
                         multicall2.add_call(v3_pool.ticks(t), true);
                     }
-
                     total_ticks_to_fetch += ticks_to_fetch.len();
                     final_updates.push(PoolFinalUpdateData {
                         pool,
                         slot0,
                         liquidity,
-                        bitmaps,
                         ticks_to_fetch,
                     });
                 }
@@ -900,7 +848,7 @@ async fn update_all_pools(
                     liquidity: update.liquidity,    // from liquidity()
                     tick_spacing: update.pool.tick_spacing,
                     ticks: ticks_map,
-                    tick_bitmap: update.bitmaps,
+                    tick_bitmap: HashMap::new(), // No longer fetching bitmaps
                 },
             );
         }

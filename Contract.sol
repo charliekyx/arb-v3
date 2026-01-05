@@ -56,7 +56,6 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
 
     address private constant BALANCER_VAULT =
         0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    address private constant WETH = 0x4200000000000000000000000000000000000006;
 
     address public executor;
 
@@ -65,7 +64,7 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         address tokenIn;
         address tokenOut;
         uint24 fee; // V3用
-        uint8 protocol; // 0 = V3 (Uniswap), 1 = V2 (Aerodrome Classic)
+        uint8 protocol; // 0 = V3, 1 = V2, 2 = CL (Same as V3)
     }
 
     struct ArbParams {
@@ -116,7 +115,8 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
         uint256 borrowAmount,
         SwapStep[] calldata steps,
         uint256 minProfit
-    ) external onlyExecutorOrOwner {
+    ) external onlyExecutorOrOwner returns (uint256) {
+        // Added return type logic for ABI match
         bytes memory userData = abi.encode(
             ArbParams({
                 borrowAmount: borrowAmount,
@@ -125,8 +125,11 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
             })
         );
 
+        // 借款代币 = 第一步交易的输入代币
+        address borrowToken = steps[0].tokenIn;
+
         IERC20[] memory tokens = new IERC20[](1);
-        tokens[0] = IERC20(WETH);
+        tokens[0] = IERC20(borrowToken);
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = borrowAmount;
 
@@ -136,6 +139,8 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
             amounts,
             userData
         );
+
+        return 0; // Return dummy value to satisfy ABI
     }
 
     function receiveFlashLoan(
@@ -148,8 +153,11 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
 
         ArbParams memory params = abi.decode(userData, (ArbParams));
 
+        //  获取借入的代币地址
+        IERC20 borrowedToken = tokens[0];
+
         uint256 repayAmount = amounts[0] + feeAmounts[0];
-        uint256 balanceBefore = IERC20(WETH).balanceOf(address(this));
+        uint256 balanceBefore = borrowedToken.balanceOf(address(this));
         uint256 currentAmount = amounts[0];
 
         // 循环执行交易
@@ -184,7 +192,8 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
                     );
                 currentAmount = amountsOut[amountsOut.length - 1];
             } else {
-                // --- V3 (Uniswap) ---
+                // --- V3 (Uniswap) OR Aerodrome CL (Protocol 0 or 2) ---
+                // Aerodrome CL Router 兼容 ExactInputSingleParams 结构
                 ISwapRouter.ExactInputSingleParams
                     memory swapParams = ISwapRouter.ExactInputSingleParams({
                         tokenIn: step.tokenIn,
@@ -202,18 +211,22 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
             }
         }
 
-        uint256 balanceAfter = IERC20(WETH).balanceOf(address(this));
+        // 检查借入代币的余额是否足够还款 + 利润
+        uint256 balanceAfter = borrowedToken.balanceOf(address(this));
         uint256 required = balanceBefore + feeAmounts[0] + params.minProfit;
 
         if (balanceAfter < required) {
             revert InsufficientProfit(balanceAfter, required);
         }
 
-        IERC20(WETH).safeTransfer(BALANCER_VAULT, repayAmount);
+        // 还款给 Balancer
+        borrowedToken.safeTransfer(BALANCER_VAULT, repayAmount);
 
-        uint256 profit = IERC20(WETH).balanceOf(address(this));
+        // 提取利润给 Owner
+        // 注意：这里只提取了借入代币的利润。如果中间产生了其他代币的粉尘，需另行提取。
+        uint256 profit = borrowedToken.balanceOf(address(this));
         if (profit > 0) {
-            IERC20(WETH).safeTransfer(owner(), profit);
+            borrowedToken.safeTransfer(owner(), profit);
         }
     }
 }
