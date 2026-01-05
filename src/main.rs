@@ -20,7 +20,7 @@ use std::{
     io::Write,
     str::FromStr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     time::Duration,
@@ -732,181 +732,186 @@ async fn update_all_pools(
         // https://basescan.org/address/0xcA11bde05977b3631167028862bE2a173976CA11#code
         let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
 
-        // [FIX] Batch processing to avoid RPC limits / Decoding Errors
-        // Split V3 pools into chunks of 50 to keep response size manageable
-        for chunk in v3_pools.chunks(50) {
-            let Ok(mut multicall) = Multicall::new(provider.clone(), Some(multicall_address)).await
-            else {
-                error!("Failed to create Multicall instance");
-                continue;
-            };
+        // [优化 2] 并发处理 Chunks
+        // 我们创建一个 stream，同时发出所有 chunk 的请求
+        let chunks: Vec<_> = v3_pools.chunks(50).collect();
 
-            let mut pre_updates: Vec<&PoolConfig> = Vec::new();
+        stream::iter(chunks)
+            .for_each_concurrent(10, |chunk| {
+                let provider = provider.clone();
+                let cache = cache.clone();
+                // 需要克隆 chunk 中的数据以移动到 async 块中
+                let chunk_owned: Vec<PoolConfig> = chunk.iter().map(|&p| p.clone()).collect();
 
-            for pool in chunk {
-                let Some(address) = get_pool_address(pool) else {
-                    continue;
-                };
-                if cache
-                    .get(&address)
-                    .map_or(false, |s| s.block_number == current_block)
-                {
-                    continue;
-                }
+                async move {
+                    let Ok(mut multicall) =
+                        Multicall::new(provider.clone(), Some(multicall_address)).await
+                    else {
+                        error!("Failed to create Multicall instance");
+                        return;
+                    };
 
-                let v3_pool = ICLPool::new(address, provider.clone());
-                multicall.add_call(v3_pool.slot_0(), true);
-                multicall.add_call(v3_pool.liquidity(), true);
-                pre_updates.push(pool);
-            }
+                    let mut pre_updates: Vec<&PoolConfig> = Vec::new();
 
-            if pre_updates.is_empty() {
-                continue;
-            }
-
-            let results = match multicall.call_raw().await {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("V3 Multicall 1 Chunk Failed: {:?}", e);
-                    continue; // Skip this chunk if it fails
-                }
-            };
-
-            // Prepare Multicall 2 for Ticks and Bitmap
-            let Ok(mut multicall2) =
-                Multicall::new(provider.clone(), Some(multicall_address)).await
-            else {
-                error!("Failed to create Multicall 2");
-                continue;
-            };
-
-            struct PoolFinalUpdateData<'a> {
-                pool: &'a PoolConfig,
-                slot0: (U256, i32, u16, u16, u16, u8, bool),
-                liquidity: u128,
-                ticks_to_fetch: Vec<i32>,
-            }
-            let mut final_updates = Vec::new();
-            let mut total_ticks_to_fetch = 0;
-
-            for (i, &pool) in pre_updates.iter().enumerate() {
-                let slot0_res = &results[i * 2];
-                let liq_res = &results[i * 2 + 1];
-
-                if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
-                    // 尝试手动解码 slot0
-                    let slot0 = match <(U256, i32, u16, u16, u16, u8, bool)>::from_token(
-                        slot0_token.clone(),
-                    ) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            warn!(
-                                "BAD POOL (slot0 decode failed): {} @ {:?} - Err: {:?}",
-                                pool.name, pool.pool, e
-                            );
+                    for pool in &chunk_owned {
+                        let Some(address) = get_pool_address(pool) else {
                             continue;
+                        };
+                        if cache
+                            .get(&address)
+                            .map_or(false, |s| s.block_number == current_block)
+                        {
+                            continue;
+                        }
+
+                        let v3_pool = ICLPool::new(address, provider.clone());
+                        multicall.add_call(v3_pool.slot_0(), true);
+                        multicall.add_call(v3_pool.liquidity(), true);
+                        pre_updates.push(pool);
+                    }
+
+                    if pre_updates.is_empty() {
+                        return;
+                    }
+
+                    let results = match multicall.call_raw().await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            warn!("V3 Multicall 1 Chunk Failed: {:?}", e);
+                            return;
                         }
                     };
 
-                    // 尝试解码 liquidity
-                    let liquidity = match liq_token.clone().into_uint() {
-                        Some(l) => l.as_u128(),
-                        None => {
+                    // Prepare Multicall 2 for Ticks and Bitmap
+                    let Ok(mut multicall2) =
+                        Multicall::new(provider.clone(), Some(multicall_address)).await
+                    else {
+                        error!("Failed to create Multicall 2");
+                        return;
+                    };
+
+                    struct PoolFinalUpdateData<'a> {
+                        pool: &'a PoolConfig,
+                        slot0: (U256, i32, u16, u16, u16, u8, bool),
+                        liquidity: u128,
+                        ticks_to_fetch: Vec<i32>,
+                    }
+                    let mut final_updates = Vec::new();
+
+                    for (i, &pool) in pre_updates.iter().enumerate() {
+                        let slot0_res = &results[i * 2];
+                        let liq_res = &results[i * 2 + 1];
+
+                        if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
+                            // 尝试手动解码 slot0
+                            let slot0 = match <(U256, i32, u16, u16, u16, u8, bool)>::from_token(
+                                slot0_token.clone(),
+                            ) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    warn!(
+                                        "BAD POOL (slot0 decode failed): {} @ {:?} - Err: {:?}",
+                                        pool.name, pool.pool, e
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            // 尝试解码 liquidity
+                            let liquidity = match liq_token.clone().into_uint() {
+                                Some(l) => l.as_u128(),
+                                None => {
+                                    warn!(
+                                        "BAD POOL (liquidity decode failed): {} @ {:?}",
+                                        pool.name, pool.pool
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            let current_tick = slot0.1;
+                            let tick_spacing = pool.tick_spacing;
+
+                            let base_tick_index = if current_tick >= 0 {
+                                current_tick / tick_spacing
+                            } else {
+                                (current_tick - tick_spacing + 1) / tick_spacing
+                            };
+
+                            let mut ticks_to_fetch = Vec::new();
+                            for i in -1..=1 {
+                                let index = (base_tick_index + i) * tick_spacing;
+                                ticks_to_fetch.push(index);
+                            }
+
+                            let v3_pool =
+                                ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+                            for &t in &ticks_to_fetch {
+                                multicall2.add_call(v3_pool.ticks(t), true);
+                            }
+                            final_updates.push(PoolFinalUpdateData {
+                                pool,
+                                slot0,
+                                liquidity,
+                                ticks_to_fetch,
+                            });
+                        } else {
                             warn!(
-                                "BAD POOL (liquidity decode failed): {} @ {:?}",
+                                "BAD POOL (multicall call failed): {} @ {:?}",
                                 pool.name, pool.pool
                             );
                             continue;
                         }
-                    };
-
-                    let current_tick = slot0.1;
-                    let tick_spacing = pool.tick_spacing;
-
-                    let base_tick_index = if current_tick >= 0 {
-                        current_tick / tick_spacing
-                    } else {
-                        (current_tick - tick_spacing + 1) / tick_spacing
-                    };
-
-                    let mut ticks_to_fetch = Vec::new();
-                    for i in -1..=1 {
-                        let index = (base_tick_index + i) * tick_spacing;
-                        ticks_to_fetch.push(index);
                     }
 
-                    let v3_pool = ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
-                    for &t in &ticks_to_fetch {
-                        multicall2.add_call(v3_pool.ticks(t), true);
+                    if final_updates.is_empty() {
+                        return;
                     }
-                    total_ticks_to_fetch += ticks_to_fetch.len();
-                    final_updates.push(PoolFinalUpdateData {
-                        pool,
-                        slot0,
-                        liquidity,
-                        ticks_to_fetch,
-                    });
-                } else {
-                    warn!(
-                        "BAD POOL (multicall call failed): {} @ {:?}",
-                        pool.name, pool.pool
-                    );
-                    continue;
-                }
-            }
 
-            if final_updates.is_empty() {
-                continue;
-            }
-
-            // info!(
-            //     "Fetching {} total ticks across {} pools in Multicall 2 (Chunk)",
-            //     total_ticks_to_fetch,
-            //     final_updates.len()
-            // );
-
-            let results2 = match multicall2.call_raw().await {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("V3 Multicall 2 (Ticks) Chunk failed: {:?}", e);
-                    continue;
-                }
-            };
-
-            // 3. Final Cache Update
-            let mut res_idx = 0;
-            for update in final_updates {
-                let mut ticks_map = HashMap::new();
-                for &t in &update.ticks_to_fetch {
-                    if let Some(Ok(token)) = results2.get(res_idx) {
-                        type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
-                        if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
-                            TickInfo::from_token(token.clone())
-                        {
-                            if initialized {
-                                ticks_map.insert(t, liquidity_net);
-                            }
+                    let results2 = match multicall2.call_raw().await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            warn!("V3 Multicall 2 (Ticks) Chunk failed: {:?}", e);
+                            return;
                         }
-                    }
-                    res_idx += 1;
-                }
+                    };
 
-                cache.insert(
-                    get_pool_address(update.pool).unwrap(),
-                    CachedPoolState {
-                        block_number: current_block,
-                        reserve0: 0,
-                        reserve1: 0,
-                        sqrt_price_x96: update.slot0.0, // from slot0
-                        tick: update.slot0.1,           // from slot0
-                        liquidity: update.liquidity,    // from liquidity()
-                        tick_spacing: update.pool.tick_spacing,
-                        ticks: ticks_map,
-                        tick_bitmap: HashMap::new(), // No longer fetching bitmaps
-                    },
-                );
-            }
-        }
+                    // 3. Final Cache Update
+                    let mut res_idx = 0;
+                    for update in final_updates {
+                        let mut ticks_map = HashMap::new();
+                        for &t in &update.ticks_to_fetch {
+                            if let Some(Ok(token)) = results2.get(res_idx) {
+                                type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                                if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
+                                    TickInfo::from_token(token.clone())
+                                {
+                                    if initialized {
+                                        ticks_map.insert(t, liquidity_net);
+                                    }
+                                }
+                            }
+                            res_idx += 1;
+                        }
+
+                        cache.insert(
+                            get_pool_address(update.pool).unwrap(),
+                            CachedPoolState {
+                                block_number: current_block,
+                                reserve0: 0,
+                                reserve1: 0,
+                                sqrt_price_x96: update.slot0.0, // from slot0
+                                tick: update.slot0.1,           // from slot0
+                                liquidity: update.liquidity,    // from liquidity()
+                                tick_spacing: update.pool.tick_spacing,
+                                ticks: ticks_map,
+                                tick_bitmap: HashMap::new(), // No longer fetching bitmaps
+                            },
+                        );
+                    }
+                }
+            })
+            .await;
     };
 
     // Run V2 and V3 updates in parallel
@@ -1194,12 +1199,147 @@ async fn main() -> Result<()> {
     info!("Active Pools: {}", pools.len());
 
     let all_pools_arc = Arc::new(pools.clone());
+
+    // [优化 4] 后台更新 Gas Price
+    let shared_gas_price = Arc::new(AtomicU64::new(100_000_000)); // 默认 0.1 gwei
+    let bg_gas_price = shared_gas_price.clone();
+    let bg_provider = provider.clone();
+    tokio::spawn(async move {
+        loop {
+            if let Ok(price) = bg_provider.get_gas_price().await {
+                let price_u64 = price.try_into().unwrap_or(u64::MAX);
+                bg_gas_price.store(price_u64, Ordering::Relaxed);
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await; // 每2秒更新一次
+        }
+    });
+
     let contract_address_exec = Address::from_str(&config.contract_address).unwrap();
 
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
     let base_tokens = vec![weth, usdc, usdbc, aero, cbeth, ezeth];
+
+    // [优化 1] 预先计算所有套利路径 (Static Calculation)
+    // 只有在 pools 列表发生变化时才需要重算，而不是每个区块重算
+    info!("Pre-calculating arbitrage paths...");
+    let mut candidates = Vec::new();
+    let max_failures = 5;
+
+    for &base_token in &base_tokens {
+        // 2-Hop
+        for i in 0..pools.len() {
+            for j in 0..pools.len() {
+                if i == j {
+                    continue;
+                }
+                if pool_failures
+                    .get(&pools[i].name)
+                    .map(|c| *c > max_failures)
+                    .unwrap_or(false)
+                    || pool_failures
+                        .get(&pools[j].name)
+                        .map(|c| *c > max_failures)
+                        .unwrap_or(false)
+                {
+                    continue;
+                }
+
+                if (pools[i].token_a == base_token || pools[i].token_b == base_token)
+                    && (pools[j].token_a == base_token || pools[j].token_b == base_token)
+                {
+                    let mid_i = if pools[i].token_a == base_token {
+                        pools[i].token_b
+                    } else {
+                        pools[i].token_a
+                    };
+                    let mid_j = if pools[j].token_a == base_token {
+                        pools[j].token_b
+                    } else {
+                        pools[j].token_a
+                    };
+
+                    if mid_i == mid_j {
+                        candidates.push(ArbPath {
+                            pools: vec![pools[i].clone(), pools[j].clone()],
+                            tokens: vec![base_token, mid_i, base_token],
+                            is_triangle: false,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 3-Hop
+        for i in 0..pools.len() {
+            let pa = &pools[i];
+            if pa.token_a != base_token && pa.token_b != base_token {
+                continue;
+            }
+            let token_1 = if pa.token_a == base_token {
+                pa.token_b
+            } else {
+                pa.token_a
+            };
+
+            for j in 0..pools.len() {
+                if i == j {
+                    continue;
+                }
+                if pool_failures
+                    .get(&pools[i].name)
+                    .map(|c| *c > max_failures)
+                    .unwrap_or(false)
+                    || pool_failures
+                        .get(&pools[j].name)
+                        .map(|c| *c > max_failures)
+                        .unwrap_or(false)
+                {
+                    continue;
+                }
+                let pb = &pools[j];
+
+                if pb.token_a != token_1 && pb.token_b != token_1 {
+                    continue;
+                }
+                let token_2 = if pb.token_a == token_1 {
+                    pb.token_b
+                } else {
+                    pb.token_a
+                };
+
+                if token_2 == base_token {
+                    continue;
+                }
+
+                for k in 0..pools.len() {
+                    if k == i || k == j {
+                        continue;
+                    }
+                    if pool_failures
+                        .get(&pools[k].name)
+                        .map(|c| *c > max_failures)
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    let pc = &pools[k];
+                    let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
+                    let pc_has_base = pc.token_a == base_token || pc.token_b == base_token;
+
+                    if pc_has_token2 && pc_has_base {
+                        candidates.push(ArbPath {
+                            pools: vec![pa.clone(), pb.clone(), pc.clone()],
+                            tokens: vec![base_token, token_1, token_2, base_token],
+                            is_triangle: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    info!("Total Arbitrage Paths calculated: {}", candidates.len());
 
     loop {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
@@ -1221,10 +1361,8 @@ async fn main() -> Result<()> {
         }
 
         let client_ref = &client;
-        let gas_price = provider
-            .get_gas_price()
-            .await
-            .unwrap_or(parse_ether("0.0000000001").unwrap());
+        // [优化 4] 从内存中读取 Gas Price，不再阻塞
+        let gas_price = U256::from(shared_gas_price.load(Ordering::Relaxed));
 
         // 1. 获取 ETH -> USDC 的参考价格
         let mut eth_price_usdc = U256::zero();
@@ -1235,123 +1373,6 @@ async fn main() -> Result<()> {
                 get_amount_out(parse_ether("1").unwrap(), weth, usdc, p, &cache, current_bn).await
             {
                 eth_price_usdc = price;
-            }
-        }
-
-        let mut candidates = Vec::new();
-        let max_failures = 5;
-
-        // 遍历所有基准代币，寻找以它为起点的套利路径 (保持原始逻辑不变)
-        for &base_token in &base_tokens {
-            // 2-Hop
-            for i in 0..pools.len() {
-                for j in 0..pools.len() {
-                    if i == j {
-                        continue;
-                    }
-                    if pool_failures
-                        .get(&pools[i].name)
-                        .map(|c| *c > max_failures)
-                        .unwrap_or(false)
-                        || pool_failures
-                            .get(&pools[j].name)
-                            .map(|c| *c > max_failures)
-                            .unwrap_or(false)
-                    {
-                        continue;
-                    }
-
-                    if (pools[i].token_a == base_token || pools[i].token_b == base_token)
-                        && (pools[j].token_a == base_token || pools[j].token_b == base_token)
-                    {
-                        let mid_i = if pools[i].token_a == base_token {
-                            pools[i].token_b
-                        } else {
-                            pools[i].token_a
-                        };
-                        let mid_j = if pools[j].token_a == base_token {
-                            pools[j].token_b
-                        } else {
-                            pools[j].token_a
-                        };
-
-                        if mid_i == mid_j {
-                            candidates.push(ArbPath {
-                                pools: vec![pools[i].clone(), pools[j].clone()],
-                                tokens: vec![base_token, mid_i, base_token],
-                                is_triangle: false,
-                            });
-                        }
-                    }
-                }
-            }
-
-            // 3-Hop
-            for i in 0..pools.len() {
-                let pa = &pools[i];
-                if pa.token_a != base_token && pa.token_b != base_token {
-                    continue;
-                }
-                let token_1 = if pa.token_a == base_token {
-                    pa.token_b
-                } else {
-                    pa.token_a
-                };
-
-                for j in 0..pools.len() {
-                    if i == j {
-                        continue;
-                    }
-                    if pool_failures
-                        .get(&pools[i].name)
-                        .map(|c| *c > max_failures)
-                        .unwrap_or(false)
-                        || pool_failures
-                            .get(&pools[j].name)
-                            .map(|c| *c > max_failures)
-                            .unwrap_or(false)
-                    {
-                        continue;
-                    }
-                    let pb = &pools[j];
-
-                    if pb.token_a != token_1 && pb.token_b != token_1 {
-                        continue;
-                    }
-                    let token_2 = if pb.token_a == token_1 {
-                        pb.token_b
-                    } else {
-                        pb.token_a
-                    };
-
-                    if token_2 == base_token {
-                        continue;
-                    }
-
-                    for k in 0..pools.len() {
-                        if k == i || k == j {
-                            continue;
-                        }
-                        if pool_failures
-                            .get(&pools[k].name)
-                            .map(|c| *c > max_failures)
-                            .unwrap_or(false)
-                        {
-                            continue;
-                        }
-                        let pc = &pools[k];
-                        let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                        let pc_has_base = pc.token_a == base_token || pc.token_b == base_token;
-
-                        if pc_has_token2 && pc_has_base {
-                            candidates.push(ArbPath {
-                                pools: vec![pa.clone(), pb.clone(), pc.clone()],
-                                tokens: vec![base_token, token_1, token_2, base_token],
-                                is_triangle: true,
-                            });
-                        }
-                    }
-                }
             }
         }
 
@@ -1366,7 +1387,7 @@ async fn main() -> Result<()> {
         let all_pools_ref = all_pools_arc.clone();
 
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
-        stream::iter(candidates)
+        stream::iter(candidates.clone())
             .for_each_concurrent(500, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
@@ -1427,6 +1448,40 @@ async fn main() -> Result<()> {
                         160_000
                     };
                     let _gas_cost_wei_val = U256::from(estimated_gas_unit) * gas_price;
+
+                    // [优化 3] 快速试算 (Pre-check)
+                    // 先算一下投入 0.1 个单位能不能回本。如果小额都亏，大额通常也亏
+                    let pre_check_amount = parse_units("0.1", decimals_token)
+                        .map(|u| U256::from(u))
+                        .unwrap_or(U256::zero());
+
+                    if !pre_check_amount.is_zero() {
+                        let mut dummy_out = pre_check_amount;
+                        let mut feasible = true;
+                        for i in 0..rotated_path_struct.pools.len() {
+                            match get_amount_out(
+                                dummy_out,
+                                rotated_path_struct.tokens[i],
+                                rotated_path_struct.tokens[i + 1],
+                                &rotated_path_struct.pools[i],
+                                &cache,
+                                current_bn,
+                            )
+                            .await
+                            {
+                                Ok(out) => dummy_out = out,
+                                Err(_) => {
+                                    feasible = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 如果试算结果亏损（输出 <= 输入），直接放弃，不要进 GSS
+                        if !feasible || dummy_out <= pre_check_amount {
+                            return;
+                        }
+                    }
 
                     // 使用旋转后的路径去计算最佳输入金额
                     // [CRITICAL]: 这里计算出的 optimal_amount_in 才是对应 start_token 的正确数量
