@@ -184,6 +184,7 @@ const CBETH_ADDR: &str = "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22";
 const EZETH_ADDR: &str = "0x2416092f143378750bb29b79ed961ab195cceea5";
 const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
+const MULTICALL_ADDRESS: &str = "0xcA11bde05977b3631167028862bE2a173976CA11";
 
 // --- Helpers ---
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -407,13 +408,33 @@ async fn validate_cl_pool(
         }
     };
 
-    if let Err(e) = contract.slot_0().call().await {
-        warn!("CL Pool {} slot0() failed (BAD POOL): {:?}", pool.name, e);
+    // [核心修改] 3. 使用 Multicall 验证 slot0
+    // 很多"坏池子"防合约调用，必须用 Multicall 模拟真实运行环境
+    let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
+
+    // 创建一个临时的 Multicall 实例用于验证
+    if let Ok(mut multicall) = Multicall::new(client.clone(), Some(multicall_address)).await {
+        // 添加 slot0 调用，设置为 false (require success)，如果失败直接报错
+        multicall.add_call(contract.slot_0(), false);
+
+        // 执行调用。如果 Multicall 返回错误，或者解码失败，说明该池子不兼容 Multicall
+        if let Err(e) = multicall.call_raw().await {
+            warn!(
+                "CL Pool {} slot0() via Multicall failed (BAD POOL): {:?}",
+                pool.name, e
+            );
+            return None;
+        }
+    } else {
+        warn!(
+            "Failed to create Multicall instance during validation for {}",
+            pool.name
+        );
         return None;
     }
 
     info!(
-        "CL Pool {} ok | ts={} fee={} liq={} | slot0 ok",
+        "CL Pool {} ok | ts={} fee={} liq={} | Multicall Check Passed",
         pool.name, ts, fee, liq
     );
     Some((ts, fee))
@@ -709,9 +730,7 @@ async fn update_all_pools(
         // Initialize Multicall. It might need a specific address on some chains.
         // Base Mainnet uses the standard Multicall3 address.
         // https://basescan.org/address/0xcA11bde05977b3631167028862bE2a173976CA11#code
-        let multicall_address = "0xcA11bde05977b3631167028862bE2a173976CA11"
-            .parse::<Address>()
-            .unwrap();
+        let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
 
         // [FIX] Batch processing to avoid RPC limits / Decoding Errors
         // Split V3 pools into chunks of 50 to keep response size manageable
