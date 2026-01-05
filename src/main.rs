@@ -842,18 +842,22 @@ async fn update_all_pools(
                             let (word_pos, _) =
                                 uniswap_v3_math::tick_bitmap::position(current_tick / tick_spacing);
 
+                            let v3_pool =
+                                ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+
+                            // [Change] 1. Add 3 bitmap calls first (Current, Prev, Next)
+                            multicall2
+                                .add_call(v3_pool.tick_bitmap((word_pos as i32 - 1) as i16), true);
+                            multicall2.add_call(v3_pool.tick_bitmap(word_pos), true);
+                            multicall2
+                                .add_call(v3_pool.tick_bitmap((word_pos as i32 + 1) as i16), true);
+
+                            // [Change] 2. Expand tick fetching range to +/- 5
                             let mut ticks_to_fetch = Vec::new();
-                            for i in -1..=1 {
+                            for i in -5..=5 {
                                 let index = (base_tick_index + i) * tick_spacing;
                                 ticks_to_fetch.push(index);
                             }
-
-                            let v3_pool =
-                                ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
-                            for &t in &ticks_to_fetch {
-                                multicall2.add_call(v3_pool.ticks(t), true);
-                            }
-                            multicall2.add_call(v3_pool.tick_bitmap(word_pos), true);
                             final_updates.push(PoolFinalUpdateData {
                                 pool,
                                 slot0,
@@ -861,6 +865,10 @@ async fn update_all_pools(
                                 ticks_to_fetch,
                                 word_pos,
                             });
+
+                            for &t in &ticks_to_fetch {
+                                multicall2.add_call(v3_pool.ticks(t), true);
+                            }
                         } else {
                             warn!(
                                 "BAD POOL (multicall call failed): {} @ {:?}",
@@ -885,8 +893,20 @@ async fn update_all_pools(
                     // 3. Final Cache Update
                     let mut res_idx = 0;
                     for update in final_updates {
-                        let mut ticks_map = HashMap::new();
+                        // [Change] Decode 3 bitmaps first
+                        let mut tick_bitmap = HashMap::new();
+                        for i in -1..=1 {
+                            if let Some(Ok(token)) = results2.get(res_idx) {
+                                if let Some(bitmap_val) = token.clone().into_uint() {
+                                    tick_bitmap
+                                        .insert((update.word_pos as i32 + i) as i16, bitmap_val);
+                                }
+                            }
+                            res_idx += 1;
+                        }
 
+                        // [Change] Decode ticks
+                        let mut ticks_map = HashMap::new();
                         for &t in &update.ticks_to_fetch {
                             if let Some(Ok(token)) = results2.get(res_idx) {
                                 type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
@@ -900,14 +920,6 @@ async fn update_all_pools(
                             }
                             res_idx += 1;
                         }
-
-                        let mut tick_bitmap = HashMap::new();
-                        if let Some(Ok(token)) = results2.get(res_idx) {
-                            if let Some(bitmap_val) = token.clone().into_uint() {
-                                tick_bitmap.insert(update.word_pos, bitmap_val);
-                            }
-                        }
-                        res_idx += 1; // Account for the bitmap call
 
                         cache.insert(
                             get_pool_address(update.pool).unwrap(),
