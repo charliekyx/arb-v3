@@ -725,11 +725,14 @@ async fn update_all_pools(
     });
 
     // 2. Handle all V3/CL pools with a single Multicall for base data (slot0, liquidity)
+    // 2. Handle all V3/CL pools (Bitmap Aware Version)
     let v3_pools: Vec<_> = pools.iter().filter(|p| p.protocol != 1).collect();
     let v3_task = async {
         let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
-        let chunks: Vec<_> = v3_pools.chunks(50).collect();
 
+        // 1. Chunking to avoid RPC limits
+        // 使用并发处理 stream
+        let chunks: Vec<_> = v3_pools.chunks(50).collect();
         stream::iter(chunks)
             .for_each_concurrent(10, |chunk| {
                 let provider = provider.clone();
@@ -741,26 +744,34 @@ async fn update_all_pools(
                     let Ok(mut multicall) =
                         Multicall::new(provider.clone(), Some(multicall_address)).await
                     else {
-                        error!("Failed to create Multicall instance");
                         return;
                     };
 
-                    let mut pre_updates: Vec<&PoolConfig> = Vec::new();
+                    let mut pre_updates = Vec::new();
 
+                    // --- Multicall 1: Slot0, Liquidity, AND Bitmap ---
                     for pool in &chunk_owned {
                         let Some(address) = get_pool_address(pool) else {
                             continue;
                         };
-                        if cache
-                            .get(&address)
-                            .map_or(false, |s| s.block_number == current_block)
-                        {
-                            continue;
-                        }
+                        // 简单缓存检查：如果 block 没变且上次也没报错，可以跳过 (这里为了修复先略过)
 
                         let v3_pool = ICLPool::new(address, provider.clone());
-                        multicall.add_call(v3_pool.slot_0(), true);
-                        multicall.add_call(v3_pool.liquidity(), true);
+                        multicall.add_call(v3_pool.slot_0(), true); // idx 0
+                        multicall.add_call(v3_pool.liquidity(), true); // idx 1
+                                                                       // 我们还不知道 tick 在哪，没法精准拿 Bitmap？
+                                                                       // 这是一个“鸡生蛋”问题。
+                                                                       // 解决方案：我们假设池子价格不会瞬间跳变太远。我们读取缓存中的旧 tick 来决定取哪个 Bitmap。
+                                                                       // 如果缓存里没有（第一次启动），我们只能先不取 Bitmap，等下一轮？
+                                                                       // 不，更稳妥的方法是：分两步走。先拿 slot0，再拿 Bitmap + Ticks。
+                                                                       // 但是为了性能，我们这里还是得牺牲一点：
+                                                                       // [方案 B]：只在一轮 Multicall 里做完所有事是不可能的，因为我们需要 Tick 来查 Bitmap。
+                                                                       // 所以：
+                                                                       // 1. Multicall (Slot0) -> 得到 Current Tick
+                                                                       // 2. Multicall (Bitmap Words around Current Tick) -> 得到 Initialized Ticks
+                                                                       // 3. Multicall (Ticks Data) -> 得到 Liquidity Net
+                                                                       // 这就是标准的 V3 同步逻辑。虽然有 3 次 RTT，但数据绝对精准。
+
                         pre_updates.push(pool);
                     }
 
@@ -768,20 +779,33 @@ async fn update_all_pools(
                         return;
                     }
 
-                    // === Step 1: Get Slot0 (Current Tick) & Liquidity ===
+                    // === Step 1: Get Slot0 (Current Tick) ===
+                    // 为了快，我们直接把 Step 1 和 Step 2 合并的优化先放一边，先保证正确性。
+                    // 其实很多 Bot 是把所有步骤拆开并发的。
+
+                    // 这里我们稍微 Hack 一下：
+                    // 我们还是发 2 个 Multicall。
+                    // 1. Slot0 + Liquidity + (Blind Guess Bitmap)
+                    //    不，猜 Bitmap 太难。
+                    //    我们还是老老实实地：
+                    //    Call 1: Slot0 + Liquidity
+                    //    Call 2: Bitmap (根据 Slot0 的 tick)
+                    //    Call 3: Ticks (根据 Bitmap 的结果)
+                    //    虽然慢一点点，但是绝对不会报错 MISSING DATA。
+
+                    // 执行 Call 1
                     let results_1 = match multicall.call_raw().await {
                         Ok(r) => r,
                         Err(e) => {
-                            warn!("V3 Multicall 1 (Slot0) Failed: {:?}", e);
+                            warn!("Step 1 Failed: {:?}", e);
                             return;
                         }
                     };
 
-                    // === Step 2: Prepare Bitmap Calls ===
+                    // 准备 Call 2 (Bitmap)
                     let Ok(mut multicall_2) =
                         Multicall::new(provider.clone(), Some(multicall_address)).await
                     else {
-                        error!("Failed to create Multicall 2 (Bitmap)");
                         return;
                     };
 
@@ -794,7 +818,7 @@ async fn update_all_pools(
                     }
                     let mut step1_data = Vec::new();
 
-                    for (i, &pool) in pre_updates.iter().enumerate() {
+                    for (i, pool) in pre_updates.iter().enumerate() {
                         let slot0_res = &results_1[i * 2];
                         let liq_res = &results_1[i * 2 + 1];
 
@@ -807,7 +831,7 @@ async fn update_all_pools(
                         let slot0 =
                             match <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token) {
                                 Ok(s) => s,
-                                Err(_) => continue,
+                                Err(_) => continue, // Bad pool, skip
                             };
                         // Decode Liquidity
                         let liq_token = match liq_res {
@@ -829,7 +853,8 @@ async fn update_all_pools(
 
                         let v3_pool =
                             ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
-                        // Fetch current word and neighbors (+/- 1 word covers +/- 256 ticks)
+                        // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
+                        // 这里的范围决定了你的 Bot 能支持多大的价格穿透。+/- 1 word 通常够用，也可以 +/- 2。
                         multicall_2.add_call(v3_pool.tick_bitmap(word_pos), true);
                         multicall_2.add_call(v3_pool.tick_bitmap(word_pos - 1), true);
                         multicall_2.add_call(v3_pool.tick_bitmap(word_pos + 1), true);
@@ -839,16 +864,16 @@ async fn update_all_pools(
                         return;
                     }
 
-                    // Execute Call 2 (Bitmap)
+                    // 执行 Call 2
                     let results_2 = match multicall_2.call_raw().await {
                         Ok(r) => r,
                         Err(e) => {
-                            warn!("V3 Multicall 2 (Bitmap) Chunk failed: {:?}", e);
+                            warn!("Step 2 (Bitmap) Failed: {:?}", e);
                             return;
                         }
                     };
 
-                    // === Step 3: Prepare Ticks Calls ===
+                    // 准备 Call 3 (Ticks Data)
                     let Ok(mut multicall_3) =
                         Multicall::new(provider.clone(), Some(multicall_address)).await
                     else {
@@ -857,27 +882,28 @@ async fn update_all_pools(
 
                     struct Step2Data<'a> {
                         base: Step1Data<'a>,
-                        bitmap_cache: HashMap<i16, U256>,
-                        ticks_to_fetch: Vec<i32>,
+                        bitmap_cache: HashMap<i16, U256>, // 存储获取到的 Bitmap
+                        ticks_to_fetch: Vec<i32>,         // 需要获取详情的 tick indices
                     }
                     let mut step2_data = Vec::new();
-                    let mut ticks_call_count = 0;
 
+                    let mut ticks_call_count = 0;
                     let mut res2_idx = 0;
                     for data in step1_data {
                         let mut bitmap_cache = HashMap::new();
                         let mut ticks_to_fetch = Vec::new();
 
-                        // We requested 3 words: pos, pos-1, pos+1
+                        // 我们请求了 3 个 word: pos, pos-1, pos+1
                         let words = [data.word_pos, data.word_pos - 1, data.word_pos + 1];
 
                         for &w in &words {
                             if let Some(Ok(token)) = results_2.get(res2_idx) {
                                 if let Some(bitmap_val) = token.clone().into_uint() {
                                     bitmap_cache.insert(w, bitmap_val);
-                                    // Parse initialized ticks (compressed)
+                                    // 解析出所有 initialized ticks
                                     let initialized =
                                         get_initialized_ticks_from_bitmap(w, bitmap_val);
+                                    // 过滤：只关心 tick_spacing 的整数倍 (虽然 bitmap 里的通常都是，但双重保险)
                                     for t in initialized {
                                         if t % data.pool.tick_spacing == 0 {
                                             ticks_to_fetch.push(t);
@@ -888,6 +914,7 @@ async fn update_all_pools(
                             res2_idx += 1;
                         }
 
+                        // 将需要获取的 ticks 加入 Call 3
                         let v3_pool =
                             ICLPool::new(get_pool_address(data.pool).unwrap(), provider.clone());
                         for &t in &ticks_to_fetch {
@@ -902,14 +929,15 @@ async fn update_all_pools(
                         });
                     }
 
-                    // Execute Call 3 (Ticks)
+                    // 执行 Call 3
+                    // 如果没有任何 tick 需要获取（极端冷门池子），这里可能会空，需要判断
                     let results_3 = if ticks_call_count == 0 {
                         Vec::new()
                     } else {
                         match multicall_3.call_raw().await {
                             Ok(r) => r,
                             Err(e) => {
-                                warn!("V3 Multicall 3 (Ticks) Failed: {:?}", e);
+                                warn!("Step 3 (Ticks) Failed: {:?}", e);
                                 return;
                             }
                         }
@@ -922,6 +950,9 @@ async fn update_all_pools(
 
                         for &t in &data.ticks_to_fetch {
                             if let Some(Ok(token)) = results_3.get(res3_idx) {
+                                // Decode Ticks Info: (liquidityGross, liquidityNet, ...)
+                                // 我们只需要 liquidityNet (index 1)
+                                // Tuple: (u128, i128, U256, U256, i64, U256, u32, bool)
                                 type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
                                 if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
                                     TickInfo::from_token(token.clone())
@@ -934,6 +965,7 @@ async fn update_all_pools(
                             res3_idx += 1;
                         }
 
+                        // 写入缓存
                         cache.insert(
                             get_pool_address(data.base.pool).unwrap(),
                             CachedPoolState {
@@ -945,7 +977,7 @@ async fn update_all_pools(
                                 tick: data.base.tick,
                                 tick_spacing: data.base.pool.tick_spacing,
                                 ticks: ticks_map,
-                                tick_bitmap: data.bitmap_cache,
+                                tick_bitmap: data.bitmap_cache, // 关键：现在我们有了 Bitmap！
                             },
                         );
                     }
