@@ -1154,14 +1154,15 @@ async fn main() -> Result<()> {
 
         let (is_valid, real_ts, real_fee) = match proto_code {
             1 => (validate_v2_pool(client.clone(), &p_config).await, 0, 0),
-            2 => {
+            // 对于 Aerodrome CL (2) 和 标准 Uniswap V3 (0, _)，都执行严格的 Multicall 验证
+            2 | _ => {
+                // 复用 validate_cl_pool，因为它检查的接口 (slot0, liquidity, fee) 与 Uniswap V3 完全兼容
                 if let Some((ts, fee)) = validate_cl_pool(client.clone(), &p_config).await {
                     (true, ts, fee)
                 } else {
                     (false, 0, 0)
                 }
             }
-            _ => (true, 0, 0),
         };
 
         if !is_valid {
