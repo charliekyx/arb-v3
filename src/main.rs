@@ -795,6 +795,7 @@ async fn update_all_pools(
                         slot0: (U256, i32, u16, u16, u16, u8, bool),
                         liquidity: u128,
                         ticks_to_fetch: Vec<i32>,
+                        word_pos: i16,
                     }
                     let mut final_updates = Vec::new();
 
@@ -838,8 +839,11 @@ async fn update_all_pools(
                                 (current_tick - tick_spacing + 1) / tick_spacing
                             };
 
+                            let (word_pos, _) =
+                                uniswap_v3_math::tick_bitmap::position(current_tick / tick_spacing);
+
                             let mut ticks_to_fetch = Vec::new();
-                            for i in -1..=1 {
+                            for i in -10..=10 {
                                 let index = (base_tick_index + i) * tick_spacing;
                                 ticks_to_fetch.push(index);
                             }
@@ -849,11 +853,13 @@ async fn update_all_pools(
                             for &t in &ticks_to_fetch {
                                 multicall2.add_call(v3_pool.ticks(t), true);
                             }
+                            multicall2.add_call(v3_pool.tick_bitmap(word_pos), true);
                             final_updates.push(PoolFinalUpdateData {
                                 pool,
                                 slot0,
                                 liquidity,
                                 ticks_to_fetch,
+                                word_pos,
                             });
                         } else {
                             warn!(
@@ -880,6 +886,7 @@ async fn update_all_pools(
                     let mut res_idx = 0;
                     for update in final_updates {
                         let mut ticks_map = HashMap::new();
+
                         for &t in &update.ticks_to_fetch {
                             if let Some(Ok(token)) = results2.get(res_idx) {
                                 type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
@@ -894,6 +901,14 @@ async fn update_all_pools(
                             res_idx += 1;
                         }
 
+                        let mut tick_bitmap = HashMap::new();
+                        if let Some(Ok(token)) = results2.get(res_idx) {
+                            if let Some(bitmap_val) = token.clone().into_uint() {
+                                tick_bitmap.insert(update.word_pos, bitmap_val);
+                            }
+                        }
+                        res_idx += 1; // Account for the bitmap call
+
                         cache.insert(
                             get_pool_address(update.pool).unwrap(),
                             CachedPoolState {
@@ -905,7 +920,7 @@ async fn update_all_pools(
                                 liquidity: update.liquidity,    // from liquidity()
                                 tick_spacing: update.pool.tick_spacing,
                                 ticks: ticks_map,
-                                tick_bitmap: HashMap::new(), // No longer fetching bitmaps
+                                tick_bitmap,
                             },
                         );
                     }
@@ -1102,6 +1117,7 @@ async fn main() -> Result<()> {
     let cbeth = Address::from_str(CBETH_ADDR)?;
     let ezeth = Address::from_str(EZETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
+    let dai = Address::from_str("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb").unwrap(); // DAI
 
     let mut pools = Vec::new();
 
@@ -1199,6 +1215,7 @@ async fn main() -> Result<()> {
     info!("Active Pools: {}", pools.len());
 
     let all_pools_arc = Arc::new(pools.clone());
+    let flash_loan_tokens = Arc::new(vec![weth, usdc, usdbc, dai]);
 
     // [优化 4] 后台更新 Gas Price
     let shared_gas_price = Arc::new(AtomicU64::new(100_000_000)); // 默认 0.1 gwei
@@ -1385,6 +1402,7 @@ async fn main() -> Result<()> {
         let profitable_paths_ref = profitable_paths.clone();
         // let pool_failures_ref = pool_failures.clone(); // Unused in this updated block
         let all_pools_ref = all_pools_arc.clone();
+        let flash_loan_tokens_ref = flash_loan_tokens.clone();
 
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
         stream::iter(candidates.clone())
@@ -1396,20 +1414,13 @@ async fn main() -> Result<()> {
                 // Clone Arcs for the async block
                 let cache = cache.clone();
                 let provider = provider.clone();
+                let flash_loan_tokens = flash_loan_tokens_ref.clone();
 
                 async move {
-                    // 1. 定义支持闪电贷的代币 (白名单)
-                    let flash_loan_tokens = vec![
-                        Address::from_str("0x4200000000000000000000000000000000000006").unwrap(), // WETH
-                        Address::from_str("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").unwrap(), // USDC
-                        Address::from_str("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA").unwrap(), // USDbC
-                        Address::from_str("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb").unwrap(), // DAI
-                    ];
-
                     let mut final_tokens = path.tokens.clone();
                     let mut final_pools = path.pools.clone();
 
-                    // 2. 检查起始代币是否在白名单里，如果不在则尝试旋转路径
+                    // 检查起始代币是否在白名单里，如果不在则尝试旋转路径
                     if !flash_loan_tokens.contains(&final_tokens[0]) {
                         if let Some(start_index) = final_tokens
                             .iter()
@@ -1451,9 +1462,8 @@ async fn main() -> Result<()> {
 
                     // [优化 3] 快速试算 (Pre-check)
                     // 先算一下投入 0.1 个单位能不能回本。如果小额都亏，大额通常也亏
-                    let pre_check_amount = parse_units("0.1", decimals_token)
-                        .map(|u| U256::from(u))
-                        .unwrap_or(U256::zero());
+                    let one_unit = U256::from(10).pow(decimals_token.into());
+                    let pre_check_amount = one_unit / 10; // 0.1 of the base unit
 
                     if !pre_check_amount.is_zero() {
                         let mut dummy_out = pre_check_amount;
@@ -1498,13 +1508,11 @@ async fn main() -> Result<()> {
                         ok_paths.fetch_add(1, Ordering::Relaxed);
 
                         // C. 精确计算 Net Profit
-                        let weth_addr = Address::from_str(WETH_ADDR).unwrap();
-
                         let price_in_weth = get_price_in_weth(
                             start_token,
-                            weth_addr,
-                            Address::from_str(USDC_ADDR).unwrap(),
-                            Address::from_str(USDBC_ADDR).unwrap(),
+                            weth,
+                            usdc,
+                            usdbc,
                             &all_pools,
                             eth_price_usdc,
                             &cache,
@@ -1515,7 +1523,7 @@ async fn main() -> Result<()> {
                         let l1_buffer = parse_ether("0.00005").unwrap();
                         let total_gas_wei = _gas_cost_wei_val + l1_buffer;
 
-                        let gas_cost_token = if start_token == weth_addr {
+                        let gas_cost_token = if start_token == weth {
                             I256::from(total_gas_wei.as_u128())
                         } else if !price_in_weth.is_zero() {
                             let val = (total_gas_wei * U256::from(10).pow(decimals_token.into()))
@@ -1538,8 +1546,7 @@ async fn main() -> Result<()> {
                             if net_eth >= min_profit_eth_threshold {
                                 is_executable = true;
                             }
-                        } else if (start_token == Address::from_str(USDC_ADDR).unwrap()
-                            || start_token == Address::from_str(USDBC_ADDR).unwrap())
+                        } else if (start_token == usdc || start_token == usdbc)
                             && net_profit > I256::from(1_500_000)
                         {
                             is_executable = true;
