@@ -1372,15 +1372,49 @@ async fn main() -> Result<()> {
                 let provider = provider.clone();
 
                 async move {
-                    let start_token = path.tokens[0];
+                    // 1. 定义支持闪电贷的代币 (白名单)
+                    let flash_loan_tokens = vec![
+                        Address::from_str("0x4200000000000000000000000000000000000006").unwrap(), // WETH
+                        Address::from_str("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").unwrap(), // USDC
+                        Address::from_str("0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA").unwrap(), // USDbC
+                        Address::from_str("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb").unwrap(), // DAI
+                    ];
+
+                    let mut final_tokens = path.tokens.clone();
+                    let mut final_pools = path.pools.clone();
+
+                    // 2. 检查起始代币是否在白名单里，如果不在则尝试旋转路径
+                    if !flash_loan_tokens.contains(&final_tokens[0]) {
+                        if let Some(start_index) = final_tokens.iter().position(|t| flash_loan_tokens.contains(t)) {
+                            // 旋转 pools
+                            final_pools.rotate_left(start_index);
+                            // 旋转 tokens: 先去掉末尾闭环元素，旋转，再补齐
+                            final_tokens.pop();
+                            final_tokens.rotate_left(start_index);
+                            final_tokens.push(final_tokens[0]);
+                            
+                            info!("Path Rotated: Start token changed from {:?} to {:?}", path.tokens[0], final_tokens[0]);
+                        } else {
+                            return; // 路径中没有支持闪电贷的代币，放弃
+                        }
+                    }
+
+                    let start_token = final_tokens[0];
                     let decimals_token = decimals(start_token);
+                    
+                    // 构建最终使用的路径对象
+                    let final_path = ArbPath {
+                        pools: final_pools.clone(),
+                        tokens: final_tokens.clone(),
+                        is_triangle: final_pools.len() == 3,
+                    };
 
                     // A. 预估 Gas 消耗 (Wei)
-                    let estimated_gas_unit = if path.is_triangle { 280_000 } else { 160_000 };
+                    let estimated_gas_unit = if final_path.is_triangle { 280_000 } else { 160_000 };
                     let _gas_cost_wei_val = U256::from(estimated_gas_unit) * gas_price;
 
                     // B. 黄金分割搜索最佳金额
-                    let best_result = optimize_amount_in(&path, I256::zero(), decimals_token, &cache, current_bn).await;
+                    let best_result = optimize_amount_in(&final_path, I256::zero(), decimals_token, &cache, current_bn).await;
 
                     if let Some((best_amount, best_gross_profit)) = best_result {
                         ok_paths.fetch_add(1, Ordering::Relaxed);
@@ -1452,28 +1486,30 @@ async fn main() -> Result<()> {
 
                             // 异步提交交易
                             tokio::spawn(async move {
-                                // [New] 构建 execute_transaction 需要的 pools_data
+                                // 2. [关键修复] 正确构建 pools_data，确保 token_in/out 跟随路径方向
                                 let mut pools_data = Vec::new();
-                                for (i, pool) in path.pools.iter().enumerate() {
-                                    // 根据 path.tokens 确定输入输出 token，这在 multi-hop 中至关重要
-                                    let token_in = path.tokens[i];
-                                    let token_out = path.tokens[i + 1];
+                                for (i, pool) in final_path.pools.iter().enumerate() {
+                                    // final_path.tokens 是有序的路径节点 [A, B, C, A]
+                                    // 第 i 跳是从 tokens[i] -> tokens[i+1]
+                                    let token_in = final_path.tokens[i];
+                                    let token_out = final_path.tokens[i + 1];
+
                                     pools_data.push((
                                         pool.router,
-                                        token_in,
-                                        token_out,
+                                        token_in,   // 必须是动态确定的方向，不能是 pool.token_a
+                                        token_out,  // 必须是动态确定的方向
                                         pool.fee,
                                         pool.protocol,
                                     ));
                                 }
 
-                                // [New] 调用执行函数
+                                // 3. 调用执行模块
                                 match execute_transaction(
                                     client_clone,
                                     contract_address_exec,
                                     best_amount,
-                                    U256::zero(), // expected_gross_profit (optional)
-                                    pools_data,
+                                    U256::zero(), // expected_gross
+                                    pools_data,   // 传入修正后的数据
                                     provider.clone(),
                                 )
                                 .await

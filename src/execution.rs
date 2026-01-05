@@ -18,6 +18,7 @@ pub async fn execute_transaction(
     contract_address: Address,
     amount_in: U256,
     _expected_gross_profit: U256,
+    // pool_data tuple: (router, token_in, token_out, fee, protocol)
     pools_data: Vec<(Address, Address, Address, u32, u8)>,
     provider: Arc<Provider<Ipc>>,
 ) -> Result<TxHash> {
@@ -40,6 +41,7 @@ pub async fn execute_transaction(
     let min_profit = U256::zero();
 
     // 2. 构建合约调用 (FunctionCall)
+    // [FIXED] 修正调用顺序：amount -> steps -> min_profit
     let call = contract.execute_arb(amount_in, steps, min_profit);
 
     // 3. 获取当前 BaseFee 并计算 EIP-1559 费用
@@ -94,8 +96,7 @@ pub async fn execute_transaction(
         .data(call.tx.data().cloned().unwrap_or_default())
         .gas(estimated_gas)
         .max_fee_per_gas(max_fee)
-        .max_priority_fee_per_gas(priority_fee)
-        .value(call.tx.value().cloned().unwrap_or_default());
+        .max_priority_fee_per_gas(priority_fee);
 
     if let Some(to_addr) = call.tx.to() {
         tx_req = tx_req.to(to_addr.clone());
