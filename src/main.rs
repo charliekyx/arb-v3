@@ -707,79 +707,104 @@ async fn update_all_pools(
         let multicall_address = "0xcA11bde05977b3631167028862bE2a173976CA11"
             .parse::<Address>()
             .unwrap();
-        let Ok(mut multicall) = Multicall::new(provider.clone(), Some(multicall_address)).await
-        else {
-            error!("Failed to create Multicall instance");
-            return;
-        };
 
-        let mut pre_updates: Vec<&PoolConfig> = Vec::new();
-
-        for pool in &v3_pools {
-            let Some(address) = get_pool_address(pool) else {
+        // [FIX] Batch processing to avoid RPC limits / Decoding Errors
+        // Split V3 pools into chunks of 50 to keep response size manageable
+        for chunk in v3_pools.chunks(50) {
+            let Ok(mut multicall) = Multicall::new(provider.clone(), Some(multicall_address)).await
+            else {
+                error!("Failed to create Multicall instance");
                 continue;
             };
-            if cache
-                .get(&address)
-                .map_or(false, |s| s.block_number == current_block)
-            {
+
+            let mut pre_updates: Vec<&PoolConfig> = Vec::new();
+
+            for pool in chunk {
+                let Some(address) = get_pool_address(pool) else {
+                    continue;
+                };
+                if cache
+                    .get(&address)
+                    .map_or(false, |s| s.block_number == current_block)
+                {
+                    continue;
+                }
+
+                let v3_pool = ICLPool::new(address, provider.clone());
+                multicall.add_call(v3_pool.slot_0(), true);
+                multicall.add_call(v3_pool.liquidity(), true);
+                pre_updates.push(pool);
+            }
+
+            if pre_updates.is_empty() {
                 continue;
             }
 
-            let v3_pool = ICLPool::new(address, provider.clone());
-            multicall.add_call(v3_pool.slot_0(), true);
-            multicall.add_call(v3_pool.liquidity(), true);
-            pre_updates.push(pool);
-        }
+            let results = match multicall.call_raw().await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("V3 Multicall 1 Chunk Failed: {:?}", e);
+                    continue; // Skip this chunk if it fails
+                }
+            };
 
-        if pre_updates.is_empty() {
-            return;
-        }
+            // Prepare Multicall 2 for Ticks and Bitmap
+            let Ok(mut multicall2) =
+                Multicall::new(provider.clone(), Some(multicall_address)).await
+            else {
+                error!("Failed to create Multicall 2");
+                continue;
+            };
 
-        let results = match multicall.call_raw().await {
-            Ok(r) => r,
-            Err(e) => {
-                warn!("V3 Multicall 1 (Slot0/Liq/Bitmaps) failed: {:?}", e);
-                return;
+            struct PoolFinalUpdateData<'a> {
+                pool: &'a PoolConfig,
+                slot0: (U256, i32, u16, u16, u16, u8, bool),
+                liquidity: u128,
+                ticks_to_fetch: Vec<i32>,
             }
-        };
+            let mut final_updates = Vec::new();
+            let mut total_ticks_to_fetch = 0;
 
-        // Prepare Multicall 2 for Ticks and Bitmap
-        let Ok(mut multicall2) = Multicall::new(provider.clone(), Some(multicall_address)).await
-        else {
-            error!("Failed to create Multicall 2");
-            return;
-        };
+            for (i, &pool) in pre_updates.iter().enumerate() {
+                let slot0_res = &results[i * 2];
+                let liq_res = &results[i * 2 + 1];
 
-        struct PoolFinalUpdateData<'a> {
-            pool: &'a PoolConfig,
-            slot0: (U256, i32, u16, u16, u16, u8, bool),
-            liquidity: u128,
-            ticks_to_fetch: Vec<i32>,
-        }
-        let mut final_updates = Vec::new();
-        let mut total_ticks_to_fetch = 0;
+                if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
+                    // 尝试手动解码 slot0
+                    let slot0 = match <(U256, i32, u16, u16, u16, u8, bool)>::from_token(
+                        slot0_token.clone(),
+                    ) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!(
+                                "BAD POOL (slot0 decode failed): {} @ {:?} - Err: {:?}",
+                                pool.name, pool.pool, e
+                            );
+                            continue;
+                        }
+                    };
 
-        for (i, &pool) in pre_updates.iter().enumerate() {
-            let slot0_res = &results[i * 2];
-            let liq_res = &results[i * 2 + 1];
-            if let (Ok(slot0_token), Ok(liq_token)) = (slot0_res, liq_res) {
-                if let (Ok(slot0), Some(liq_val)) = (
-                    <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token.clone()),
-                    liq_token.clone().into_uint(),
-                ) {
-                    let liquidity = liq_val.as_u128();
+                    // 尝试解码 liquidity
+                    let liquidity = match liq_token.clone().into_uint() {
+                        Some(l) => l.as_u128(),
+                        None => {
+                            warn!(
+                                "BAD POOL (liquidity decode failed): {} @ {:?}",
+                                pool.name, pool.pool
+                            );
+                            continue;
+                        }
+                    };
+
                     let current_tick = slot0.1;
                     let tick_spacing = pool.tick_spacing;
 
-                    // Calculate base tick index with correct floor division for negative numbers
                     let base_tick_index = if current_tick >= 0 {
                         current_tick / tick_spacing
                     } else {
                         (current_tick - tick_spacing + 1) / tick_spacing
                     };
 
-                    // [FIXED] Expand tick fetching range to prevent MISSING TICK DATA errors
                     let mut ticks_to_fetch = Vec::new();
                     for i in -1..=1 {
                         let index = (base_tick_index + i) * tick_spacing;
@@ -797,60 +822,66 @@ async fn update_all_pools(
                         liquidity,
                         ticks_to_fetch,
                     });
+                } else {
+                    warn!(
+                        "BAD POOL (multicall call failed): {} @ {:?}",
+                        pool.name, pool.pool
+                    );
+                    continue;
                 }
             }
-        }
 
-        if final_updates.is_empty() {
-            return;
-        }
-
-        info!(
-            "Fetching {} total ticks across {} pools in Multicall 2",
-            total_ticks_to_fetch,
-            final_updates.len()
-        );
-
-        let results2 = match multicall2.call_raw().await {
-            Ok(r) => r,
-            Err(e) => {
-                warn!("V3 Multicall 2 (Ticks) failed: {:?}", e);
-                return;
+            if final_updates.is_empty() {
+                continue;
             }
-        };
 
-        // 3. Final Cache Update
-        let mut res_idx = 0;
-        for update in final_updates {
-            let mut ticks_map = HashMap::new();
-            for &t in &update.ticks_to_fetch {
-                if let Some(Ok(token)) = results2.get(res_idx) {
-                    type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
-                    if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
-                        TickInfo::from_token(token.clone())
-                    {
-                        if initialized {
-                            ticks_map.insert(t, liquidity_net);
+            // info!(
+            //     "Fetching {} total ticks across {} pools in Multicall 2 (Chunk)",
+            //     total_ticks_to_fetch,
+            //     final_updates.len()
+            // );
+
+            let results2 = match multicall2.call_raw().await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("V3 Multicall 2 (Ticks) Chunk failed: {:?}", e);
+                    continue;
+                }
+            };
+
+            // 3. Final Cache Update
+            let mut res_idx = 0;
+            for update in final_updates {
+                let mut ticks_map = HashMap::new();
+                for &t in &update.ticks_to_fetch {
+                    if let Some(Ok(token)) = results2.get(res_idx) {
+                        type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                        if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
+                            TickInfo::from_token(token.clone())
+                        {
+                            if initialized {
+                                ticks_map.insert(t, liquidity_net);
+                            }
                         }
                     }
+                    res_idx += 1;
                 }
-                res_idx += 1;
-            }
 
-            cache.insert(
-                get_pool_address(update.pool).unwrap(),
-                CachedPoolState {
-                    block_number: current_block,
-                    reserve0: 0,
-                    reserve1: 0,
-                    sqrt_price_x96: update.slot0.0, // from slot0
-                    tick: update.slot0.1,           // from slot0
-                    liquidity: update.liquidity,    // from liquidity()
-                    tick_spacing: update.pool.tick_spacing,
-                    ticks: ticks_map,
-                    tick_bitmap: HashMap::new(), // No longer fetching bitmaps
-                },
-            );
+                cache.insert(
+                    get_pool_address(update.pool).unwrap(),
+                    CachedPoolState {
+                        block_number: current_block,
+                        reserve0: 0,
+                        reserve1: 0,
+                        sqrt_price_x96: update.slot0.0, // from slot0
+                        tick: update.slot0.1,           // from slot0
+                        liquidity: update.liquidity,    // from liquidity()
+                        tick_spacing: update.pool.tick_spacing,
+                        ticks: ticks_map,
+                        tick_bitmap: HashMap::new(), // No longer fetching bitmaps
+                    },
+                );
+            }
         }
     };
 
