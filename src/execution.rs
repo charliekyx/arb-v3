@@ -74,7 +74,7 @@ pub async fn execute_transaction(
     let estimated_gas: U256 = match call.estimate_gas().await {
         Ok(gas) => {
             // 使用 explicit 的 from 转换，避免直接运算导致的类型歧义
-            let multiplier = U256::from(120);
+            let multiplier = U256::from(150);
             let divisor = U256::from(100);
             (gas * multiplier) / divisor
         }

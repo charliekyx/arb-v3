@@ -781,7 +781,7 @@ async fn update_all_pools(
 
                     // [FIXED] Expand tick fetching range to prevent MISSING TICK DATA errors
                     let mut ticks_to_fetch = Vec::new();
-                    for i in -10..=10 {
+                    for i in -4..=4 {
                         let index = (base_tick_index + i) * tick_spacing;
                         ticks_to_fetch.push(index);
                     }
@@ -1345,10 +1345,10 @@ async fn main() -> Result<()> {
                             final_tokens.rotate_left(start_index);
                             final_tokens.push(final_tokens[0]);
 
-                            info!(
-                                "Path Rotated: Start token changed from {:?} to {:?}",
-                                path.tokens[0], final_tokens[0]
-                            );
+                            // info!(
+                            //     "Path Rotated: Start token changed from {:?} to {:?}",
+                            //     path.tokens[0], final_tokens[0]
+                            // );
                         } else {
                             return; // 路径中没有支持闪电贷的代币，放弃
                         }
