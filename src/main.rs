@@ -407,8 +407,13 @@ async fn validate_cl_pool(
         }
     };
 
+    if let Err(e) = contract.slot_0().call().await {
+        warn!("CL Pool {} slot0() failed (BAD POOL): {:?}", pool.name, e);
+        return None;
+    }
+
     info!(
-        "CL Pool {} ok | ts={} fee={} liq={}",
+        "CL Pool {} ok | ts={} fee={} liq={} | slot0 ok",
         pool.name, ts, fee, liq
     );
     Some((ts, fee))
