@@ -843,7 +843,7 @@ async fn update_all_pools(
                                 uniswap_v3_math::tick_bitmap::position(current_tick / tick_spacing);
 
                             let mut ticks_to_fetch = Vec::new();
-                            for i in -10..=10 {
+                            for i in -1..=1 {
                                 let index = (base_tick_index + i) * tick_spacing;
                                 ticks_to_fetch.push(index);
                             }
