@@ -1063,11 +1063,6 @@ async fn main() -> Result<()> {
             0
         };
 
-        // debug code
-        if proto_code != 0 {
-            continue;
-        } // 只测 Uniswap V3
-
         if proto_code == 2 && quoter_addr == Some(uniswap_quoter_addr) {
             warn!("Skipping [{}]: CL pool using Uniswap Quoter.", cfg.name);
             continue;

@@ -70,9 +70,6 @@ pub async fn execute_transaction(
         ), // Fallback
     };
 
-    let tx = call.tx.clone();
-    info!("Debug Calldata: {:?}", tx.data());
-
     // 4. 模拟执行 (Estimate Gas)
     let estimated_gas: U256 = match call.estimate_gas().await {
         Ok(gas) => {
