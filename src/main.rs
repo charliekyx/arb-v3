@@ -858,6 +858,11 @@ async fn update_all_pools(
                                 let index = (base_tick_index + i) * tick_spacing;
                                 ticks_to_fetch.push(index);
                             }
+
+                            for &t in &ticks_to_fetch {
+                                multicall2.add_call(v3_pool.ticks(t), true);
+                            }
+
                             final_updates.push(PoolFinalUpdateData {
                                 pool,
                                 slot0,
@@ -865,10 +870,6 @@ async fn update_all_pools(
                                 ticks_to_fetch,
                                 word_pos,
                             });
-
-                            for &t in &ticks_to_fetch {
-                                multicall2.add_call(v3_pool.ticks(t), true);
-                            }
                         } else {
                             warn!(
                                 "BAD POOL (multicall call failed): {} @ {:?}",
