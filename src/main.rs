@@ -727,13 +727,7 @@ async fn update_all_pools(
     // 2. Handle all V3/CL pools with a single Multicall for base data (slot0, liquidity)
     let v3_pools: Vec<_> = pools.iter().filter(|p| p.protocol != 1).collect();
     let v3_task = async {
-        // Initialize Multicall. It might need a specific address on some chains.
-        // Base Mainnet uses the standard Multicall3 address.
-        // https://basescan.org/address/0xcA11bde05977b3631167028862bE2a173976CA11#code
         let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
-
-        // [优化 2] 并发处理 Chunks
-        // 我们创建一个 stream，同时发出所有 chunk 的请求
         let chunks: Vec<_> = v3_pools.chunks(50).collect();
 
         stream::iter(chunks)
@@ -823,10 +817,7 @@ async fn update_all_pools(
                         let liquidity = liq_token.into_uint().unwrap_or_default().as_u128();
 
                         let current_tick = slot0.1;
-                        let tick_spacing = pool.tick_spacing;
-                        // Calculate compressed word position
-                        let compressed = current_tick / tick_spacing;
-                        let word_pos = (compressed >> 8) as i16;
+                        let word_pos = (current_tick >> 8) as i16;
 
                         step1_data.push(Step1Data {
                             pool,
@@ -888,9 +879,9 @@ async fn update_all_pools(
                                     let initialized =
                                         get_initialized_ticks_from_bitmap(w, bitmap_val);
                                     for t in initialized {
-                                        // Convert compressed tick back to actual tick
-                                        let actual_tick = t * data.pool.tick_spacing;
-                                        ticks_to_fetch.push(actual_tick);
+                                        if t % data.pool.tick_spacing == 0 {
+                                            ticks_to_fetch.push(t);
+                                        }
                                     }
                                 }
                             }
