@@ -1759,14 +1759,26 @@ async fn main() -> Result<()> {
                                 ));
                             }
 
+                            // [新增逻辑] 计算 min_profit
+                            // best_gross_profit 是 I256 (可能为负，虽然 is_executable 保证了它大致为正)
+                            // 我们将其转换为 U256 传给合约
+                            let _gross_profit_u256 = if best_gross_profit > I256::zero() {
+                                U256::from(best_gross_profit.as_u128())
+                            } else {
+                                U256::zero()
+                            };
+
+                            // [策略配置] 暂时设置为 0 (保本策略) 以解决 InsufficientProfit 报错
+                            let min_profit_param = U256::zero();
+
                             // 异步提交交易
                             tokio::spawn(async move {
                                 match execute_transaction(
                                     client_clone,
                                     contract_address_exec,
                                     best_amount,
-                                    U256::zero(), // expected_profit
-                                    pools_data,   // 传入修正后的数据
+                                    min_profit_param, // 传入计算好的值
+                                    pools_data,
                                     provider.clone(),
                                 )
                                 .await

@@ -17,7 +17,7 @@ pub async fn execute_transaction(
     client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
     contract_address: Address,
     amount_in: U256,
-    _expected_gross_profit: U256,
+    expected_gross_profit: U256,
     // pool_data tuple: (router, token_in, token_out, fee, protocol)
     pools_data: Vec<(Address, Address, Address, u32, u8)>,
     provider: Arc<Provider<Ipc>>,
@@ -36,9 +36,13 @@ pub async fn execute_transaction(
 
     let contract = ArbEngine::new(contract_address, client.clone());
 
-    // 建议：min_profit 不要写死为 0，最好作为参数传入。
-    // 这里暂时保持为 0 以确保先跑通，后续可以在 main.rs 里计算。
-    let min_profit = U256::zero();
+    // 2. 使用传入的利润参数
+    let min_profit = expected_gross_profit;
+
+    info!(
+        "🚀 Executing Arb: AmountIn: {}, MinProfit: {}",
+        amount_in, min_profit
+    );
 
     // 2. 构建合约调用 (FunctionCall)
     // [FIXED] 修正调用顺序：amount -> steps -> min_profit
