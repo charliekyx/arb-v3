@@ -44,6 +44,14 @@ pub async fn execute_transaction(
     // [FIXED] 修正调用顺序：amount -> steps -> min_profit
     let call = contract.execute_arb(amount_in, steps, min_profit);
 
+    if let Some(calldata) = call.calldata() {
+        tracing::info!("============================================================");
+        tracing::info!("🚀 [DEBUG] To (Contract): {:?}", contract_address);
+        tracing::info!("👤 [DEBUG] From (Bot):    {:?}", client.address());
+        tracing::info!("📝 [DEBUG] Calldata:      0x{}", hex::encode(calldata));
+        tracing::info!("============================================================");
+    }
+
     // 3. 获取当前 BaseFee 并计算 EIP-1559 费用
     let _block = client
         .provider()
@@ -100,16 +108,6 @@ pub async fn execute_transaction(
 
     if let Some(to_addr) = call.tx.to() {
         tx_req = tx_req.to(to_addr.clone());
-    }
-
-    if let Some(calldata) = call.calldata() {
-        tracing::info!("============================================================");
-        tracing::info!("🚀 [DEBUG] To (Contract): {:?}", contract_address);
-        tracing::info!("👤 [DEBUG] From (Bot):    {:?}", client.address());
-        tracing::info!("📝 [DEBUG] Calldata:      0x{}", hex::encode(calldata));
-        tracing::info!("============================================================");
-    } else {
-        tracing::warn!("⚠️ [DEBUG] Could not fetch calldata from builder");
     }
 
     // 6. 发送交易
