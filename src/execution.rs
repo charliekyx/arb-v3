@@ -102,6 +102,16 @@ pub async fn execute_transaction(
         tx_req = tx_req.to(to_addr.clone());
     }
 
+    if let Some(calldata) = call.calldata() {
+        tracing::info!("============================================================");
+        tracing::info!("🚀 [DEBUG] To (Contract): {:?}", contract_address);
+        tracing::info!("👤 [DEBUG] From (Bot):    {:?}", client.address());
+        tracing::info!("📝 [DEBUG] Calldata:      0x{}", hex::encode(calldata));
+        tracing::info!("============================================================");
+    } else {
+        tracing::warn!("⚠️ [DEBUG] Could not fetch calldata from builder");
+    }
+
     // 6. 发送交易
     let pending_tx = client.send_transaction(tx_req, None).await?;
 
