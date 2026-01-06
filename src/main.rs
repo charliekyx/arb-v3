@@ -172,6 +172,11 @@ abigen!(
         function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)
         function token0() external view returns (address)
         function token1() external view returns (address)
+    ]"#;
+
+    IUniswapV3Factory,
+    r#"[
+        function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)
     ]"#
 );
 
@@ -185,6 +190,7 @@ const EZETH_ADDR: &str = "0x2416092f143378750bb29b79ed961ab195cceea5";
 const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 const MULTICALL_ADDRESS: &str = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const UNI_V3_FACTORY: &str = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"; // Base Uniswap V3 Factory
 
 // --- Helpers ---
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1151,6 +1157,53 @@ struct ArbPath {
     is_triangle: bool,
 }
 
+async fn find_best_v3_pool(
+    client: Arc<SignerMiddleware<Arc<Provider<Ipc>>, LocalWallet>>,
+    token_a: Address,
+    token_b: Address,
+) -> Option<(Address, u32, i32, u128)> {
+    // 标准费率列表
+    let fees = vec![100, 500, 3000, 10000];
+    let factory =
+        IUniswapV3Factory::new(UNI_V3_FACTORY.parse::<Address>().unwrap(), client.clone());
+
+    let mut best_pool = None;
+    let mut max_liquidity = 0u128;
+
+    for fee in fees {
+        // 1. 询问 Factory 该费率的池子地址
+        let pool_addr = match factory.get_pool(token_a, token_b, fee).call().await {
+            Ok(addr) => addr,
+            Err(_) => continue,
+        };
+
+        if pool_addr == Address::zero() {
+            continue;
+        }
+
+        // 2. 检查该池子是否有流动性
+        let pool = ICLPool::new(pool_addr, client.clone());
+        let liquidity = match pool.liquidity().call().await {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        if liquidity > max_liquidity {
+            max_liquidity = liquidity;
+            // 获取 tickSpacing (验证通过顺便拿)
+            let ts = pool.tick_spacing().call().await.unwrap_or(0);
+            best_pool = Some((pool_addr, fee, ts, liquidity));
+        }
+    }
+
+    // 只有流动性大于 0 才算找到
+    if max_liquidity > 0 {
+        best_pool
+    } else {
+        None
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -1230,25 +1283,64 @@ async fn main() -> Result<()> {
             protocol: proto_code,
         };
 
-        let (is_valid, real_ts, real_fee) = match proto_code {
-            1 => (validate_v2_pool(client.clone(), &p_config).await, 0, 0),
-            // 对于 Aerodrome CL (2) 和 标准 Uniswap V3 (0, _)，都执行严格的 Multicall 验证
-            2 | _ => {
-                // 复用 validate_cl_pool，因为它检查的接口 (slot0, liquidity, fee) 与 Uniswap V3 完全兼容
-                if let Some((ts, fee)) = validate_cl_pool(client.clone(), &p_config).await {
-                    (true, ts, fee)
+        let mut final_config = p_config;
+        let mut is_valid = false;
+        let mut real_ts = 0;
+        let mut real_fee = 0;
+
+        if proto_code == 1 {
+            // V2 保持不变
+            if validate_v2_pool(client.clone(), &final_config).await {
+                is_valid = true;
+            }
+        } else {
+            // V3 / CL
+            // 1. 先尝试配置里的默认值
+            if let Some((ts, fee)) = validate_cl_pool(client.clone(), &final_config).await {
+                is_valid = true;
+                real_ts = ts;
+                real_fee = fee;
+            }
+            // 2. [新增] 如果默认验证失败，且是 Uniswap V3 (protocol 0)，尝试自动寻找正确费率
+            else if proto_code == 0 {
+                info!(
+                    "⚠️ Pool {} invalid with fee {}, searching for better fee...",
+                    final_config.name, final_config.fee
+                );
+
+                let token_a = final_config.token_a;
+                let token_b = final_config.token_b;
+
+                if let Some((new_addr, new_fee, new_ts, liq)) =
+                    find_best_v3_pool(client.clone(), token_a, token_b).await
+                {
+                    info!(
+                        "✅ FIXED: Found valid pool for {}! Fee: {} -> {}, Addr: {:?}, Liq: {}",
+                        final_config.name, final_config.fee, new_fee, new_addr, liq
+                    );
+
+                    // 修正配置
+                    final_config.pool = Some(new_addr); // 更新地址
+                    final_config.fee = new_fee; // 更新费率
+                    final_config.tick_spacing = new_ts;
+
+                    is_valid = true;
+                    real_ts = new_ts;
+                    real_fee = new_fee;
                 } else {
-                    (false, 0, 0)
+                    warn!(
+                        "❌ FAILED: No valid V3 pool found for pair {}",
+                        final_config.name
+                    );
                 }
             }
-        };
+        }
 
         if !is_valid {
             warn!("Removing invalid pool [{}]: Validation failed.", cfg.name);
             continue;
         }
 
-        let mut final_config = p_config;
         if proto_code == 2 {
             final_config.tick_spacing = real_ts;
             final_config.pool_fee = real_fee;
