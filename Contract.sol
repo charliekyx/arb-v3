@@ -192,18 +192,25 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
                     );
                 currentAmount = amountsOut[amountsOut.length - 1];
             } else {
-                // --- V3 (Uniswap) OR Aerodrome CL (Protocol 0 or 2) ---
-                // Aerodrome CL Router 兼容 ExactInputSingleParams 结构
-                ISwapRouter.ExactInputSingleParams
-                    memory swapParams = ISwapRouter.ExactInputSingleParams({
+                bool zeroForOne = step.tokenIn < step.tokenOut;
+                uint160 sqrtPriceLimitX96 = 0;
+
+                if (zeroForOne) {
+                    sqrtPriceLimitX96 = 4295128740;
+                } else {
+                    sqrtPriceLimitX96 = 1461446703485210103287273052203988822378723970341; // TickMath.MAX_SQRT_RATIO - 1
+                }
+
+                ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter
+                    .ExactInputSingleParams({
                         tokenIn: step.tokenIn,
                         tokenOut: step.tokenOut,
                         fee: step.fee,
                         recipient: address(this),
-                        deadline: block.timestamp,
+                        deadline: block.timestamp, // 旧版 Router 需要这个
                         amountIn: currentAmount,
                         amountOutMinimum: 0,
-                        sqrtPriceLimitX96: 0
+                        sqrtPriceLimitX96: sqrtPriceLimitX96 // [修复] 传入计算好的有效值
                     });
                 currentAmount = ISwapRouter(step.router).exactInputSingle(
                     swapParams
