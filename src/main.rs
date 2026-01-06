@@ -1336,7 +1336,7 @@ async fn main() -> Result<()> {
             // 2. 自动修正逻辑 (如果上面的验证失败，或者地址不匹配)
             if !is_valid && proto_code == 0 {
                 info!(
-                    "⚠️ Pool {} invalid with fee {}, searching for better fee...",
+                    "Pool {} invalid with fee {}, searching for better fee...",
                     final_config.name, final_config.fee
                 );
 
@@ -1345,7 +1345,7 @@ async fn main() -> Result<()> {
                         .await
                 {
                     info!(
-                        "✅ FIXED: Found valid pool for {}! Fee: {} -> {}, Addr: {:?}, Liq: {}",
+                        "FIXED: Found valid pool for {}! Fee: {} -> {}, Addr: {:?}, Liq: {}",
                         final_config.name, final_config.fee, new_fee, new_addr, liq
                     );
 
@@ -1358,7 +1358,7 @@ async fn main() -> Result<()> {
                     real_fee = new_fee;
                 } else {
                     warn!(
-                        "❌ FAILED: No valid V3 pool found for pair {}",
+                        "FAILED: No valid V3 pool found for pair {}",
                         final_config.name
                     );
                 }
@@ -1803,7 +1803,7 @@ async fn main() -> Result<()> {
                             // 异步提交交易
                             tokio::spawn(async move {
                                 match execute_transaction(
-                                    client_clone,
+                                    client_clone.clone(),
                                     contract_address_exec,
                                     best_amount,
                                     min_profit_param, // 传入计算好的值
@@ -1812,7 +1812,52 @@ async fn main() -> Result<()> {
                                 )
                                 .await
                                 {
-                                    Ok(tx) => info!("Tx Broadcasted: {:?}", tx),
+                                    Ok(tx) => {
+                                        info!("Tx Broadcasted: {:?}", tx);
+                                        // 轮询等待交易确认
+                                        let mut attempts = 0;
+                                        loop {
+                                            tokio::time::sleep(Duration::from_secs(2)).await;
+                                            match client_clone.get_transaction_receipt(tx).await {
+                                                Ok(Some(receipt)) => {
+                                                    if receipt.status == Some(U64::from(1)) {
+                                                        info!("Tx Confirmed: {:?}", tx);
+                                                        let subject = format!("Arbitrage Success! Tx: {:?}", tx);
+                                                        let body = format!(
+                                                            "Arbitrage executed successfully!\n\nTx Hash: {:?}\nBlock: {:?}\nGas Used: {:?}\n\nCheck Explorer: https://basescan.org/tx/{:?}",
+                                                            tx, receipt.block_number, receipt.gas_used, tx
+                                                        );
+                                                        // 在 blocking 线程中发送邮件，避免阻塞异步运行时
+                                                        tokio::task::spawn_blocking(move || {
+                                                            send_email_alert(&subject, &body);
+                                                        });
+                                                    } else {
+                                                        error!("Tx Reverted: {:?}", tx);
+                                                        let subject = format!("Arbitrage Reverted! Tx: {:?}", tx);
+                                                        let body = format!(
+                                                            "Arbitrage transaction reverted on-chain.\n\nTx Hash: {:?}\nBlock: {:?}\nGas Used: {:?}\n\nCheck Explorer: https://basescan.org/tx/{:?}",
+                                                            tx, receipt.block_number, receipt.gas_used, tx
+                                                        );
+                                                        tokio::task::spawn_blocking(move || {
+                                                            send_email_alert(&subject, &body);
+                                                        });
+                                                    }
+                                                    break;
+                                                }
+                                                Ok(None) => {
+                                                    attempts += 1;
+                                                    if attempts > 30 { // ~60s timeout
+                                                        warn!("Timeout waiting for receipt: {:?}", tx);
+                                                        break;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to check receipt: {:?}", e);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
                                     Err(e) => error!("Tx Failed: {:?}", e),
                                 }
                             });
