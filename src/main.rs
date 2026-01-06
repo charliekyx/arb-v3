@@ -1594,7 +1594,7 @@ async fn main() -> Result<()> {
 
                         // D. 盈利判定与执行
                         let mut is_executable = false;
-                        let min_profit_eth_threshold = parse_ether("0.0005").unwrap();
+                        let min_profit_eth_threshold = parse_ether("0.00005").unwrap();
 
                         if !price_in_weth.is_zero() && net_profit > I256::zero() {
                             let net_eth = (U256::from(net_profit.as_u128()) * price_in_weth)
@@ -1604,9 +1604,31 @@ async fn main() -> Result<()> {
                                 is_executable = true;
                             }
                         } else if (start_token == usdc || start_token == usdbc)
-                            && net_profit > I256::from(1_500_000)
+                            && net_profit > I256::from(100_000)
                         {
                             is_executable = true;
+                        }
+
+                        // 将 I256 转换为可读数值方便调试
+                        let profit_readable =
+                            format_units(U256::from(net_profit.abs().as_u128()), decimals_token)
+                                .unwrap_or("0".to_string());
+                        let profit_sign = if net_profit >= I256::zero() { "+" } else { "-" };
+
+                        // 阈值：只打印利润大于 -0.01 美元的机会 (防止日志太多刷屏)
+                        // 假设 Token 是 USDC (6 decimals)， -0.01 USDC = -10000 units
+                        // 这是一个宽松的过滤，让我们能看到接近盈利的机会
+                        let debug_threshold = I256::from(-100000);
+
+                        if net_profit > debug_threshold {
+                            info!(
+                                "👀 PEEK: {} | AmtIn: {} | Net: {}{} | Executable: {}",
+                                token_symbol(start_token),
+                                format_token_amount(best_amount, start_token),
+                                profit_sign,
+                                profit_readable,
+                                is_executable
+                            );
                         }
 
                         if is_executable {
