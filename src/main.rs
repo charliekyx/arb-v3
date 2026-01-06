@@ -1294,34 +1294,63 @@ async fn main() -> Result<()> {
                 is_valid = true;
             }
         } else {
-            // V3 / CL
-            // 1. 先尝试配置里的默认值
+            // V3 / CL // 1. 基础验证：池子是否存在且有钱
             if let Some((ts, fee)) = validate_cl_pool(client.clone(), &final_config).await {
-                is_valid = true;
-                real_ts = ts;
-                real_fee = fee;
+                // [新增核心修复]：如果是 Uniswap V3，必须验证地址是否匹配 Factory
+                // 这能防止 Aerodrome 的池子被误传给 Uniswap Router
+                let mut address_match = true;
+                if proto_code == 0 {
+                    let factory = IUniswapV3Factory::new(
+                        UNI_V3_FACTORY.parse::<Address>().unwrap(),
+                        client.clone(),
+                    );
+                    // 询问 Factory：这个币对和费率，对应的池子到底是谁？
+                    let onchain_pool = factory
+                        .get_pool(final_config.token_a, final_config.token_b, final_config.fee)
+                        .call()
+                        .await
+                        .unwrap_or(Address::zero());
+
+                    // 如果 Factory 说池子是 A，但配置文件里写的是 B -> 报错并修正
+                    if onchain_pool != final_config.pool.unwrap() {
+                        warn!(
+                            "⚠️ Address Mismatch for {}: Config has {:?}, Factory says {:?}",
+                            final_config.name,
+                            final_config.pool.unwrap(),
+                            onchain_pool
+                        );
+                        address_match = false;
+
+                        // 可选：如果 Factory 返回的地址也是有效的，我们可以自动修正过去
+                        // 但通常 Factory 返回空地址意味着费率不对，走下面的自动寻找逻辑更好
+                    }
+                }
+
+                if address_match {
+                    is_valid = true;
+                    real_ts = ts;
+                    real_fee = fee;
+                }
             }
-            // 2. [新增] 如果默认验证失败，且是 Uniswap V3 (protocol 0)，尝试自动寻找正确费率
-            else if proto_code == 0 {
+
+            // 2. 自动修正逻辑 (如果上面的验证失败，或者地址不匹配)
+            if !is_valid && proto_code == 0 {
                 info!(
                     "⚠️ Pool {} invalid with fee {}, searching for better fee...",
                     final_config.name, final_config.fee
                 );
 
-                let token_a = final_config.token_a;
-                let token_b = final_config.token_b;
-
                 if let Some((new_addr, new_fee, new_ts, liq)) =
-                    find_best_v3_pool(client.clone(), token_a, token_b).await
+                    find_best_v3_pool(client.clone(), final_config.token_a, final_config.token_b)
+                        .await
                 {
                     info!(
                         "✅ FIXED: Found valid pool for {}! Fee: {} -> {}, Addr: {:?}, Liq: {}",
                         final_config.name, final_config.fee, new_fee, new_addr, liq
                     );
 
-                    // 修正配置
-                    final_config.pool = Some(new_addr); // 更新地址
-                    final_config.fee = new_fee; // 更新费率
+                    final_config.pool = Some(new_addr);
+                    final_config.fee = new_fee;
                     final_config.tick_spacing = new_ts;
 
                     is_valid = true;
