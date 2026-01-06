@@ -12,7 +12,6 @@ interface ISwapRouter {
         address tokenOut;
         uint24 fee;
         address recipient;
-        uint256 deadline;
         uint256 amountIn;
         uint256 amountOutMinimum;
         uint160 sqrtPriceLimitX96;
@@ -207,7 +206,6 @@ contract FlashLoanExecutor is IFlashLoanRecipient, Ownable {
                         tokenOut: step.tokenOut,
                         fee: step.fee,
                         recipient: address(this),
-                        deadline: block.timestamp, // 旧版 Router 需要这个
                         amountIn: currentAmount,
                         amountOutMinimum: 0,
                         sqrtPriceLimitX96: sqrtPriceLimitX96 // [修复] 传入计算好的有效值
