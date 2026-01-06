@@ -1252,6 +1252,9 @@ async fn main() -> Result<()> {
         if proto_code == 2 {
             final_config.tick_spacing = real_ts;
             final_config.pool_fee = real_fee;
+
+            // 关键：把查到的真实 tick_spacing 赋给 fee，传给合约
+            final_config.fee = real_ts as u32;
         }
         pools.push(final_config);
 
@@ -1259,6 +1262,12 @@ async fn main() -> Result<()> {
             "Validated Pool: {} | Token A: {:?} | Token B: {:?}",
             cfg.name, token_a, token_b
         );
+        if proto_code == 2 {
+            info!(
+                "Fixed CL Pool Config: {} | fee/ts set to {}",
+                final_config.name, final_config.fee
+            );
+        }
 
         if proto_code == 2 {
             if let Some(q) = quoter_addr {
