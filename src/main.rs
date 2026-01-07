@@ -191,6 +191,8 @@ const MAX_DAILY_GAS_LOSS_WEI: u128 = 20_000_000_000_000_000;
 const UNISWAP_QUOTER: &str = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 const MULTICALL_ADDRESS: &str = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const UNI_V3_FACTORY: &str = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"; // Base Uniswap V3 Factory
+const UNI_V3_ROUTER: &str = "0x2626664c2603336E57B271c5C0b26F421741e481";
+const AERO_CL_ROUTER: &str = "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5"; // Aerodrome Slipstream Router
 
 // --- Helpers ---
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -1204,6 +1206,99 @@ async fn find_best_v3_pool(
     }
 }
 
+// [新增] 智能同步 V3 池子数据 (Slot0 + Bitmap + Ticks)
+// 用于在发现潜在机会时进行二次校验，防止因缺少 Tick 数据导致的“幻觉利润”
+async fn sync_v3_pool_smart(
+    provider: Arc<Provider<Ipc>>,
+    pool: &PoolConfig,
+    cache: &PoolCache,
+    current_block: U64,
+) -> Result<()> {
+    if pool.protocol == 1 {
+        return Ok(());
+    }
+    let Some(pool_addr) = get_pool_address(pool) else {
+        return Ok(());
+    };
+
+    let v3_pool = ICLPool::new(pool_addr, provider.clone());
+    let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
+    
+    // Step 1: Slot0 & Liquidity
+    let mut multicall = Multicall::new(provider.clone(), Some(multicall_address)).await?;
+    multicall.add_call(v3_pool.slot_0(), false);
+    multicall.add_call(v3_pool.liquidity(), false);
+
+    let res1 = multicall.call_raw().await?;
+    let slot0_token = res1[0].clone().map_err(|e| anyhow!("Slot0 failed: {:?}", e))?;
+    let slot0 = <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token)?;
+    let liquidity_token = res1[1].clone().map_err(|e| anyhow!("Liquidity failed: {:?}", e))?;
+    let liquidity = liquidity_token.into_uint().unwrap_or_default().as_u128();
+    let current_tick = slot0.1;
+    let word_pos = (current_tick >> 8) as i16;
+
+    // Step 2: Bitmap (Current + Neighbors)
+    let mut multicall2 = Multicall::new(provider.clone(), Some(multicall_address)).await?;
+    let words = [word_pos, word_pos - 1, word_pos + 1];
+    for &w in &words {
+        multicall2.add_call(v3_pool.tick_bitmap(w), false);
+    }
+    let res2 = multicall2.call_raw().await?;
+
+    let mut bitmap_cache = HashMap::new();
+    let mut ticks_to_fetch = Vec::new();
+
+    for (i, &w) in words.iter().enumerate() {
+        if let Some(Ok(token)) = res2.get(i) {
+            if let Some(bitmap) = token.clone().into_uint() {
+                bitmap_cache.insert(w, bitmap);
+                let initialized = get_initialized_ticks_from_bitmap(w, bitmap);
+                for t in initialized {
+                    if t % pool.tick_spacing == 0 {
+                        ticks_to_fetch.push(t);
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 3: Ticks Data
+    let mut ticks_map = HashMap::new();
+    if !ticks_to_fetch.is_empty() {
+        let mut multicall3 = Multicall::new(provider.clone(), Some(multicall_address)).await?;
+        for &t in &ticks_to_fetch {
+            multicall3.add_call(v3_pool.ticks(t), false);
+        }
+        let res3 = multicall3.call_raw().await?;
+        
+        for (i, &t) in ticks_to_fetch.iter().enumerate() {
+            if let Some(Ok(token)) = res3.get(i) {
+                type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) = TickInfo::from_token(token.clone()) {
+                    if initialized {
+                        ticks_map.insert(t, liquidity_net);
+                    }
+                }
+            }
+        }
+    }
+
+    // Update Cache
+    cache.insert(pool_addr, CachedPoolState {
+        block_number: current_block,
+        reserve0: 0,
+        reserve1: 0,
+        sqrt_price_x96: slot0.0,
+        liquidity,
+        tick: current_tick,
+        tick_spacing: pool.tick_spacing,
+        ticks: ticks_map,
+        tick_bitmap: bitmap_cache,
+    });
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -1223,9 +1318,9 @@ async fn main() -> Result<()> {
     let weth = Address::from_str(WETH_ADDR)?;
     let usdc = Address::from_str(USDC_ADDR)?;
     let usdbc = Address::from_str(USDBC_ADDR)?;
-    let aero = Address::from_str(AERO_ADDR)?;
-    let cbeth = Address::from_str(CBETH_ADDR)?;
-    let ezeth = Address::from_str(EZETH_ADDR)?;
+    let _aero = Address::from_str(AERO_ADDR)?;
+    let _cbeth = Address::from_str(CBETH_ADDR)?;
+    let _ezeth = Address::from_str(EZETH_ADDR)?;
     let uniswap_quoter_addr = Address::from_str(UNISWAP_QUOTER)?;
     let dai = Address::from_str("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb").unwrap(); // DAI
 
@@ -1284,9 +1379,9 @@ async fn main() -> Result<()> {
         };
 
         let mut final_config = p_config;
-        let mut is_valid = false;
-        let mut real_ts = 0;
-        let mut real_fee = 0;
+        // let mut is_valid = false;
+        // let mut real_ts = 0;
+        // let mut real_fee = 0;
 
         // if proto_code == 1 {
         //     // V2 保持不变
@@ -1365,9 +1460,9 @@ async fn main() -> Result<()> {
         //     }
         // }
 
-        is_valid = true;
-        real_ts = tick_spacing;
-        real_fee = pool_fee;
+        let is_valid = true;
+        let real_ts = tick_spacing;
+        let real_fee = pool_fee;
         info!("Validated Pool: {} (Trusted JSON)", final_config.name);
 
         if !is_valid {
@@ -1695,6 +1790,40 @@ async fn main() -> Result<()> {
 
                     if let Some((best_amount, best_gross_profit)) = best_result {
                         ok_paths.fetch_add(1, Ordering::Relaxed);
+                        
+                        // [核心修复] 二次校验：发现机会后，强制同步链上真实 Tick 数据
+                        // 防止因 Bitmap 缺失导致的“无限流动性”幻觉
+                        let mut verified_profit = best_gross_profit;
+                        let mut verified_amount = best_amount;
+                        
+                        // 只有当利润看起来不错时才去校验 (避免太小的机会浪费 RPC)
+                        if best_gross_profit > I256::from(100_000) { // > 0.1 USDC approx
+                            let mut sync_success = true;
+                            for pool in &final_pools {
+                                if let Err(e) = sync_v3_pool_smart(provider.clone(), pool, &cache, current_bn).await {
+                                    warn!("Verification Sync Failed for {}: {:?}", pool.name, e);
+                                    sync_success = false;
+                                    break;
+                                }
+                            }
+                            
+                            if sync_success {
+                                // 使用更新后的 Cache 重算
+                                if let Some((new_amt, new_profit)) = optimize_amount_in(&rotated_path_struct, I256::zero(), decimals_token, &cache, current_bn).await {
+                                    verified_amount = new_amt;
+                                    verified_profit = new_profit;
+                                } else {
+                                    // 重算后发现不盈利了（说明之前是幻觉）
+                                    return;
+                                }
+                            } else {
+                                return; // 同步失败，放弃
+                            }
+                        }
+                        
+                        // 使用校验后的数据继续
+                        let best_amount = verified_amount;
+                        let best_gross_profit = verified_profit;
 
                         // C. 精确计算 Net Profit
                         let price_in_weth = get_price_in_weth(
@@ -1782,8 +1911,16 @@ async fn main() -> Result<()> {
                             for (i, pool) in final_pools.iter().enumerate() {
                                 let token_in = final_tokens[i];
                                 let token_out = final_tokens[i + 1];
+
+                                // [Fix] Ensure correct router is used based on protocol
+                                let router = match pool.protocol {
+                                    0 => Address::from_str(UNI_V3_ROUTER).unwrap(),
+                                    2 => Address::from_str(AERO_CL_ROUTER).unwrap(),
+                                    _ => pool.router,
+                                };
+
                                 pools_data.push((
-                                    pool.router,
+                                    router,
                                     token_in,
                                     token_out,
                                     pool.fee,
