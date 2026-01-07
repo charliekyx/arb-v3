@@ -740,7 +740,7 @@ async fn update_all_pools(
 
         // 1. Chunking to avoid RPC limits
         // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(20).collect();
+        let chunks: Vec<_> = v3_pools.chunks(1).collect();
         stream::iter(chunks)
             .for_each_concurrent(4, |chunk| {
                 let provider = provider.clone();
