@@ -1427,7 +1427,9 @@ async fn main() -> Result<()> {
     let mut stream = client.subscribe_blocks().await?;
     info!("Waiting for blocks...");
 
-    let base_tokens = vec![weth, usdc, usdbc, aero, cbeth, ezeth];
+    // 优化方案：只算核心币种的环路 (WETH, USDC, USDbC, DAI)
+    // 剔除 AERO, cbETH, ezETH 等非核心代币，大幅减少路径数量，避免计算垃圾路径
+    let base_tokens = vec![weth, usdc, usdbc, dai];
 
     // [优化 1] 预先计算所有套利路径 (Static Calculation)
     // 只有在 pools 列表发生变化时才需要重算，而不是每个区块重算
