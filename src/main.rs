@@ -918,9 +918,7 @@ async fn update_all_pools(
                                         get_initialized_ticks_from_bitmap(w, bitmap_val);
                                     // 过滤：只关心 tick_spacing 的整数倍 (虽然 bitmap 里的通常都是，但双重保险)
                                     for t in initialized {
-                                        if t % data.pool.tick_spacing == 0 {
-                                            ticks_to_fetch.push(t);
-                                        }
+                                        ticks_to_fetch.push(t);
                                     }
                                 }
                             }
@@ -1259,9 +1257,7 @@ async fn sync_v3_pool_smart(
                 bitmap_cache.insert(w, bitmap);
                 let initialized = get_initialized_ticks_from_bitmap(w, bitmap);
                 for t in initialized {
-                    if t % pool.tick_spacing == 0 {
-                        ticks_to_fetch.push(t);
-                    }
+                    ticks_to_fetch.push(t);
                 }
             }
         }
