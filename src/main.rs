@@ -1642,6 +1642,42 @@ async fn main() -> Result<()> {
     }
     info!("Total Arbitrage Paths calculated: {}", candidates.len());
 
+    // ================== [核心优化] 过滤活跃池子 ==================
+    // 只有在 candidates 路径中出现过的池子，才需要每秒更新状态。
+    // 其他 79万个孤岛池子或者垃圾池子，直接忽略。
+
+    info!("Filtering active pools for state sync...");
+
+    // 1. 收集所有“有用”的池子地址
+    let mut active_pool_addresses = std::collections::HashSet::new();
+    for path in &candidates {
+        for pool in &path.pools {
+            if let Some(addr) = get_pool_address(pool) {
+                active_pool_addresses.insert(addr);
+            }
+        }
+    }
+
+    // 2. 从全量 pools 中筛选出 subset
+    let active_pools_config: Vec<PoolConfig> = pools
+        .iter()
+        .filter(|p| {
+            if let Some(addr) = get_pool_address(p) {
+                active_pool_addresses.contains(&addr)
+            } else {
+                false
+            }
+        })
+        .cloned()
+        .collect();
+
+    info!(
+        "Optimization: Reduced sync target from {} to {} pools.",
+        pools.len(),
+        active_pools_config.len()
+    );
+    // ============================================================
+
     loop {
         let block = match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
             Ok(Some(b)) => b,
@@ -1654,7 +1690,7 @@ async fn main() -> Result<()> {
         let block_number = current_bn.as_u64();
 
         info!("Block {}: Syncing pool states...", block_number);
-        update_all_pools(provider.clone(), &pools, cache.clone(), current_bn).await;
+        update_all_pools(provider.clone(), &active_pools_config, cache.clone(), current_bn).await;
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("Daily Gas Limit Reached.");
