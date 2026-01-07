@@ -1433,117 +1433,113 @@ async fn main() -> Result<()> {
 
     // [优化 1] 预先计算所有套利路径 (Static Calculation)
     // 只有在 pools 列表发生变化时才需要重算，而不是每个区块重算
-    info!("Pre-calculating arbitrage paths...");
+    // ================== 高效路径生成算法 (Graph Logic) ==================
+    // 1. 构建邻接表 (Adjacency Map)
+    // 复杂度: O(N) - 只遍历一遍池子
+    info!("Building graph from {} pools...", pools.len());
+    let mut pools_by_token: HashMap<Address, Vec<usize>> = HashMap::new();
+
+    for (idx, pool) in pools.iter().enumerate() {
+        pools_by_token.entry(pool.token_a).or_default().push(idx);
+        pools_by_token.entry(pool.token_b).or_default().push(idx);
+    }
+
+    // 2. 使用图搜索寻找路径 (Graph Search)
+    // 复杂度: O(M) - M 为有效路径数量，极快
+    info!("Pre-calculating arbitrage paths using Graph Search...");
     let mut candidates = Vec::new();
     let max_failures = 5;
 
     for &base_token in &base_tokens {
-        // 2-Hop
-        for i in 0..pools.len() {
-            for j in 0..pools.len() {
-                if i == j {
-                    continue;
-                }
+        // [Step 1] 找到第一跳: base_token -> mid_token
+        if let Some(first_hop_indices) = pools_by_token.get(&base_token) {
+            for &idx1 in first_hop_indices {
+                let p1 = &pools[idx1];
+
+                // 检查失败次数
                 if pool_failures
-                    .get(&pools[i].name)
+                    .get(&p1.name)
                     .map(|c| *c > max_failures)
                     .unwrap_or(false)
-                    || pool_failures
-                        .get(&pools[j].name)
-                        .map(|c| *c > max_failures)
-                        .unwrap_or(false)
                 {
                     continue;
                 }
 
-                if (pools[i].token_a == base_token || pools[i].token_b == base_token)
-                    && (pools[j].token_a == base_token || pools[j].token_b == base_token)
-                {
-                    let mid_i = if pools[i].token_a == base_token {
-                        pools[i].token_b
-                    } else {
-                        pools[i].token_a
-                    };
-                    let mid_j = if pools[j].token_a == base_token {
-                        pools[j].token_b
-                    } else {
-                        pools[j].token_a
-                    };
-
-                    if mid_i == mid_j {
-                        candidates.push(ArbPath {
-                            pools: vec![pools[i].clone(), pools[j].clone()],
-                            tokens: vec![base_token, mid_i, base_token],
-                            is_triangle: false,
-                        });
-                    }
-                }
-            }
-        }
-
-        // 3-Hop
-        for i in 0..pools.len() {
-            let pa = &pools[i];
-            if pa.token_a != base_token && pa.token_b != base_token {
-                continue;
-            }
-            let token_1 = if pa.token_a == base_token {
-                pa.token_b
-            } else {
-                pa.token_a
-            };
-
-            for j in 0..pools.len() {
-                if i == j {
-                    continue;
-                }
-                if pool_failures
-                    .get(&pools[i].name)
-                    .map(|c| *c > max_failures)
-                    .unwrap_or(false)
-                    || pool_failures
-                        .get(&pools[j].name)
-                        .map(|c| *c > max_failures)
-                        .unwrap_or(false)
-                {
-                    continue;
-                }
-                let pb = &pools[j];
-
-                if pb.token_a != token_1 && pb.token_b != token_1 {
-                    continue;
-                }
-                let token_2 = if pb.token_a == token_1 {
-                    pb.token_b
+                // 确定中间代币
+                let mid_token = if p1.token_a == base_token {
+                    p1.token_b
                 } else {
-                    pb.token_a
+                    p1.token_a
                 };
 
-                if token_2 == base_token {
-                    continue;
-                }
+                // [Step 2] 找到第二跳: mid_token -> next_token
+                if let Some(second_hop_indices) = pools_by_token.get(&mid_token) {
+                    for &idx2 in second_hop_indices {
+                        // 避免同一个池子
+                        if idx1 == idx2 {
+                            continue;
+                        }
 
-                for k in 0..pools.len() {
-                    if k == i || k == j {
-                        continue;
-                    }
-                    if pool_failures
-                        .get(&pools[k].name)
-                        .map(|c| *c > max_failures)
-                        .unwrap_or(false)
-                    {
-                        continue;
-                    }
-                    let pc = &pools[k];
-                    let pc_has_token2 = pc.token_a == token_2 || pc.token_b == token_2;
-                    let pc_has_base = pc.token_a == base_token || pc.token_b == base_token;
+                        let p2 = &pools[idx2];
+                        // 检查失败次数
+                        if pool_failures
+                            .get(&p2.name)
+                            .map(|c| *c > max_failures)
+                            .unwrap_or(false)
+                        {
+                            continue;
+                        }
 
-                    if pc_has_token2 && pc_has_base {
-                        candidates.push(ArbPath {
-                            pools: vec![pa.clone(), pb.clone(), pc.clone()],
-                            tokens: vec![base_token, token_1, token_2, base_token],
-                            is_triangle: true,
-                        });
+                        let next_token = if p2.token_a == mid_token {
+                            p2.token_b
+                        } else {
+                            p2.token_a
+                        };
+
+                        // Case A: 2-Hop (next_token == base_token)
+                        if next_token == base_token {
+                            candidates.push(ArbPath {
+                                pools: vec![p1.clone(), p2.clone()],
+                                tokens: vec![base_token, mid_token, base_token],
+                                is_triangle: false,
+                            });
+                        } else {
+                            // Case B: 3-Hop (next_token -> base_token)
+                            // [Step 3] 找到第三跳
+                            if let Some(third_hop_indices) = pools_by_token.get(&next_token) {
+                                for &idx3 in third_hop_indices {
+                                    if idx3 == idx1 || idx3 == idx2 {
+                                        continue;
+                                    }
+
+                                    let p3 = &pools[idx3];
+                                    // 检查失败次数
+                                    if pool_failures
+                                        .get(&p3.name)
+                                        .map(|c| *c > max_failures)
+                                        .unwrap_or(false)
+                                    {
+                                        continue;
+                                    }
+
+                                    let last_token = if p3.token_a == next_token {
+                                        p3.token_b
+                                    } else {
+                                        p3.token_a
+                                    };
+
+                                    if last_token == base_token {
+                                        candidates.push(ArbPath {
+                                            pools: vec![p1.clone(), p2.clone(), p3.clone()],
+                                            tokens: vec![
+                                                base_token, mid_token, next_token, base_token,
+                                            ],
+                                            is_triangle: true,
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
