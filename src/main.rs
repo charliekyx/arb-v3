@@ -863,9 +863,10 @@ async fn update_all_pools(
                             ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
                         // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
                         // 这里的范围决定了你的 Bot 能支持多大的价格穿透。+/- 1 word 通常够用，也可以 +/- 2。
-                        multicall_2.add_call(v3_pool.tick_bitmap(word_pos), true);
-                        multicall_2.add_call(v3_pool.tick_bitmap(word_pos - 1), true);
-                        multicall_2.add_call(v3_pool.tick_bitmap(word_pos + 1), true);
+                        // [Modified] Expand search radius to +/- 5 words (approx +/- 1280 ticks)
+                        for i in -5..=5 {
+                            multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), true);
+                        }
                     }
 
                     if step1_data.is_empty() {
@@ -902,7 +903,11 @@ async fn update_all_pools(
                         let mut ticks_to_fetch = Vec::new();
 
                         // 我们请求了 3 个 word: pos, pos-1, pos+1
-                        let words = [data.word_pos, data.word_pos - 1, data.word_pos + 1];
+                        // [Modified] Expand search radius to +/- 5 words
+                        let mut words = Vec::new();
+                        for i in -5..=5 {
+                            words.push(data.word_pos + i as i16);
+                        }
 
                         for &w in &words {
                             if let Some(Ok(token)) = results_2.get(res2_idx) {
