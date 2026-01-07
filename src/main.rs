@@ -740,7 +740,7 @@ async fn update_all_pools(
 
         // 1. Chunking to avoid RPC limits
         // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(1).collect();
+        let chunks: Vec<_> = v3_pools.chunks(20).collect();
         stream::iter(chunks)
             .for_each_concurrent(4, |chunk| {
                 let provider = provider.clone();
@@ -1860,6 +1860,22 @@ async fn main() -> Result<()> {
                         // 使用校验后的数据继续
                         let best_amount = verified_amount;
                         let best_gross_profit = verified_profit;
+
+                        // [Safety Fuse] Max Trade Amount Check
+                        // 防止因计算错误导致的巨额闪电贷 (e.g. 320 ETH)
+                        let max_trade_amount = if start_token == weth {
+                            parse_ether("10").unwrap() // Max 10 ETH
+                        } else if start_token == usdc || start_token == usdbc {
+                            parse_units("25000", 6).unwrap().into() // Max 25k USDC
+                        } else if start_token == dai {
+                            parse_ether("25000").unwrap() // Max 25k DAI
+                        } else {
+                            U256::max_value()
+                        };
+                        if best_amount > max_trade_amount {
+                            warn!("⚠️ Safety Fuse Triggered: Amount {} exceeds limit for {}. Skipping.", format_token_amount(best_amount, start_token), token_symbol(start_token));
+                            continue;
+                        }
 
                         // C. 精确计算 Net Profit
                         let price_in_weth = get_price_in_weth(
