@@ -1874,7 +1874,7 @@ async fn main() -> Result<()> {
                         };
                         if best_amount > max_trade_amount {
                             warn!("⚠️ Safety Fuse Triggered: Amount {} exceeds limit for {}. Skipping.", format_token_amount(best_amount, start_token), token_symbol(start_token));
-                            continue;
+                            return;
                         }
 
                         // C. 精确计算 Net Profit
