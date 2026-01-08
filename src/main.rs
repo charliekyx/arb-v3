@@ -1327,7 +1327,36 @@ async fn main() -> Result<()> {
     let mut probed_quoters = std::collections::HashSet::new();
 
     let config_content = fs::read_to_string("pools.json").context("Failed to read pools.json")?;
-    let json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
+    let mut json_configs: Vec<JsonPoolInput> = serde_json::from_str(&config_content)?;
+
+    // ================== [新增] 暴力清洗：只保留核心资产池 ==================
+    // 定义 Base 链上的核心资产地址 (小写)
+    let whitelist_tokens = vec![
+        "0x4200000000000000000000000000000000000006", // WETH
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", // USDC
+        "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca", // USDbC
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb", // DAI
+        "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22", // cbETH (Base)
+    ];
+
+    let before_count = json_configs.len();
+    json_configs.retain(|p| {
+        let t0 = p.token_a.to_lowercase();
+        let t1 = p.token_b.to_lowercase();
+        
+        // 逻辑：两个币中，必须至少有一个是核心资产
+        let has_major_token = whitelist_tokens.contains(&t0.as_str()) || 
+                              whitelist_tokens.contains(&t1.as_str());
+        
+        has_major_token
+    });
+    
+    info!("🧹 CLEANUP: Dropped {} junk pools. Remaining HIGH QUALITY pools: {}", 
+        before_count - json_configs.len(), 
+        json_configs.len()
+    );
+    // ======================================================================
+
     let weth = Address::from_str(WETH_ADDR)?;
     let usdc = Address::from_str(USDC_ADDR)?;
     let usdbc = Address::from_str(USDBC_ADDR)?;
