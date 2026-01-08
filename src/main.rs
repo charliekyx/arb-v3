@@ -740,9 +740,9 @@ async fn update_all_pools(
 
         // 1. Chunking to avoid RPC limits
         // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(1).collect();
+        let chunks: Vec<_> = v3_pools.chunks(10).collect();
         stream::iter(chunks)
-            .for_each_concurrent(4, |chunk| {
+            .for_each_concurrent(10, |chunk| {
                 let provider = provider.clone();
                 let cache = cache.clone();
                 // 需要克隆 chunk 中的数据以移动到 async 块中
@@ -872,10 +872,11 @@ async fn update_all_pools(
                         let v3_pool =
                             ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
                         // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
-                        // 这里的范围决定了你的 Bot 能支持多大的价格穿透。+/- 1 word 通常够用，也可以 +/- 2。
-                        // [Modified] Expand search radius to +/- 5 words (approx +/- 1280 ticks)
-                        for i in -2..=2 {
-                            multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), true);
+                        // [Fix] 1. 缩小范围到 +/- 1 word (3个词，覆盖 +/- 256 ticks，足够了)
+                        // 范围太大会导致包过大，Geth 依然会超时。
+                        for i in -1..=1 {
+                            // [Fix] 2. 把 true 改成 false！关闭 allow_failure，解决 InvalidData 解码错误。
+                            multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), false);
                         }
                     }
 
@@ -913,13 +914,14 @@ async fn update_all_pools(
                         let mut ticks_to_fetch = Vec::new();
 
                         // 我们请求了 3 个 word: pos, pos-1, pos+1
-                        // [Modified] Expand search radius to +/- 5 words
+                        // [Fix] 1. 缩小范围到 +/- 1 word
                         let mut words = Vec::new();
-                        for i in -5..=5 {
+                        for i in -1..=1 {
                             words.push(data.word_pos + i as i16);
                         }
 
                         for &w in &words {
+                            // [Fix] Since allow_failure is false, results_2 contains Tokens directly
                             if let Some(Ok(token)) = results_2.get(res2_idx) {
                                 if let Some(bitmap_val) = token.clone().into_uint() {
                                     bitmap_cache.insert(w, bitmap_val);
