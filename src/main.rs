@@ -874,7 +874,7 @@ async fn update_all_pools(
                         // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
                         // 这里的范围决定了你的 Bot 能支持多大的价格穿透。+/- 1 word 通常够用，也可以 +/- 2。
                         // [Modified] Expand search radius to +/- 5 words (approx +/- 1280 ticks)
-                        for i in -5..=5 {
+                        for i in -2..=2 {
                             multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), true);
                         }
                     }
@@ -1918,18 +1918,19 @@ async fn main() -> Result<()> {
 
                         // D. 盈利判定与执行
                         let mut is_executable = false;
-                        let min_profit_eth_threshold = parse_ether("0.00005").unwrap();
 
-                        if !price_in_weth.is_zero() && net_profit > I256::zero() {
-                            let net_eth = (U256::from(net_profit.as_u128()) * price_in_weth)
-                                / U256::from(10).pow(decimals_token.into());
+                        // [新增] 最小利润门槛：至少赚 1 美金 (1 USDC) 或者是 0.001 ETH
+                        let min_profit_threshold = if start_token == usdc || start_token == usdbc {
+                            I256::from(1_000_000) // 1 USDC
+                        } else if start_token == weth {
+                            I256::from(1_000_000_000_000_000u64) // 0.001 ETH
+                        } else if start_token == dai {
+                            I256::from(1_000_000_000_000_000_000u64) // 1 DAI
+                        } else {
+                            I256::zero()
+                        };
 
-                            if net_eth >= min_profit_eth_threshold {
-                                is_executable = true;
-                            }
-                        } else if (start_token == usdc || start_token == usdbc)
-                            && net_profit > I256::from(100_000)
-                        {
+                        if net_profit > min_profit_threshold {
                             is_executable = true;
                         }
 
