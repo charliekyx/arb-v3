@@ -740,7 +740,7 @@ async fn update_all_pools(
 
         // 1. Chunking to avoid RPC limits
         // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(20).collect();
+        let chunks: Vec<_> = v3_pools.chunks(1).collect();
         stream::iter(chunks)
             .for_each_concurrent(4, |chunk| {
                 let provider = provider.clone();
@@ -805,10 +805,20 @@ async fn update_all_pools(
                     let results_1 = match multicall.call_raw().await {
                         Ok(r) => r,
                         Err(e) => {
-                            warn!("Step 1 Failed: {:?}", e);
+                            warn!("Step 1 RPC Failed for chunk (size {}): {:?}. Skipped.", chunk_owned.len(), e);
                             return;
                         }
                     };
+
+                    // 检查数据是否完整
+                    if results_1.len() != chunk_owned.len() * 2 {
+                        warn!(
+                            "Step 1 Partial Data: Expected {} but got {}. Skipped.",
+                            chunk_owned.len() * 2,
+                            results_1.len()
+                        );
+                        return;
+                    }
 
                     // 准备 Call 2 (Bitmap)
                     let Ok(mut multicall_2) =
