@@ -1474,7 +1474,7 @@ async fn main() -> Result<()> {
         let is_valid = true;
         let real_ts = tick_spacing;
         let real_fee = pool_fee;
-        info!("Validated Pool: {} (Trusted JSON)", final_config.name);
+        // info!("Validated Pool: {} (Trusted JSON)", final_config.name);
 
         if !is_valid {
             warn!("Removing invalid pool [{}]: Validation failed.", cfg.name);
