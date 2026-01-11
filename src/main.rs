@@ -167,7 +167,7 @@ abigen!(
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
         function token0() external view returns (address)
         function tickBitmap(int16 wordPosition) external view returns (uint256)
-        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)
+        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, bool initialized)
     ]"#;
 
     // Uniswap V2 是行业标准。绝大多数 V2 类 DEX（如 BaseSwap, SushiSwap, AlienBase）都完全复制了 Uniswap V2 的接口。
@@ -999,16 +999,29 @@ async fn update_all_pools(
 
                         for &t in &data.ticks_to_fetch {
                             if let Some(Ok(token)) = results_3.get(res3_idx) {
-                                // Decode Ticks Info: (liquidityGross, liquidityNet, ...)
-                                // 我们只需要 liquidityNet (index 1)
-                                // Tuple: (u128, i128, U256, U256, i64, U256, u32, bool)
-                                type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
-                                if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) =
-                                    TickInfo::from_token(token.clone())
-                                {
-                                    if initialized {
-                                        ticks_map.insert(t, liquidity_net);
+                                let mut liquidity_net_val = 0i128;
+                                let mut is_initialized = false;
+
+                                if data.base.pool.protocol == 2 {
+                                    // === Aerodrome CL Decoding (5 fields) ===
+                                    type AeroTickInfo = (u128, i128, U256, U256, bool);
+                                    if let Ok((_, ln, _, _, init)) = AeroTickInfo::from_token(token.clone()) {
+                                        liquidity_net_val = ln;
+                                        is_initialized = init;
+                                    } else {
+                                        warn!("Failed to decode Aero ticks for pool {}", data.base.pool.name);
                                     }
+                                } else {
+                                    // === Uniswap V3 Decoding (8 fields) ===
+                                    type UniV3TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                                    if let Ok((_, ln, _, _, _, _, _, init)) = UniV3TickInfo::from_token(token.clone()) {
+                                        liquidity_net_val = ln;
+                                        is_initialized = init;
+                                    }
+                                }
+
+                                if is_initialized {
+                                    ticks_map.insert(t, liquidity_net_val);
                                 }
                             }
                             res3_idx += 1;
@@ -1337,11 +1350,27 @@ async fn sync_v3_pool_smart(
         
         for (i, &t) in ticks_to_fetch.iter().enumerate() {
             if let Some(Ok(token)) = res3.get(i) {
-                type TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
-                if let Ok((_, liquidity_net, _, _, _, _, _, initialized)) = TickInfo::from_token(token.clone()) {
-                    if initialized {
-                        ticks_map.insert(t, liquidity_net);
+                let mut liquidity_net_val = 0i128;
+                let mut is_initialized = false;
+
+                if pool.protocol == 2 {
+                    // === Aerodrome CL Decoding (5 fields) ===
+                    type AeroTickInfo = (u128, i128, U256, U256, bool);
+                    if let Ok((_, ln, _, _, init)) = AeroTickInfo::from_token(token.clone()) {
+                        liquidity_net_val = ln;
+                        is_initialized = init;
                     }
+                } else {
+                    // === Uniswap V3 Decoding (8 fields) ===
+                    type UniV3TickInfo = (u128, i128, U256, U256, i64, U256, u32, bool);
+                    if let Ok((_, ln, _, _, _, _, _, init)) = UniV3TickInfo::from_token(token.clone()) {
+                        liquidity_net_val = ln;
+                        is_initialized = init;
+                    }
+                }
+
+                if is_initialized {
+                    ticks_map.insert(t, liquidity_net_val);
                 }
             }
         }
