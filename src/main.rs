@@ -167,7 +167,7 @@ abigen!(
         function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
         function token0() external view returns (address)
         function tickBitmap(int16 wordPosition) external view returns (uint256)
-        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, bool initialized)
+        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)
     ]"#;
 
     // Uniswap V2 是行业标准。绝大多数 V2 类 DEX（如 BaseSwap, SushiSwap, AlienBase）都完全复制了 Uniswap V2 的接口。
@@ -365,33 +365,6 @@ async fn debug_slot0_raw(provider: &Provider<Ipc>, pool: Address) -> Result<()> 
     info!("slot0 raw len={} bytes", out.0.len());
     info!("slot0 raw=0x{}", hex::encode(&out.0));
     Ok(())
-}
-
-// [DEBUG TOOL] 用来查看 ticks 函数到底返回了什么
-async fn debug_ticks_raw(provider: Arc<Provider<Ipc>>, pool_addr: Address, tick: i32) {
-    info!("🔍 DEBUG: Probing ticks({}) for pool {:?}", tick, pool_addr);
-    
-    // 1. 构造 ticks(int24) 的调用数据
-    // selector: "ticks(int24)" => 0xf30fb93b
-    let selector = hex::decode("f30fb93b").unwrap();
-    let token = ethers::abi::Token::Int(I256::from(tick).into_raw());
-    let args = ethers::abi::encode(&[token]);
-    
-    let mut data = selector;
-    data.extend(args);
-    
-    // 2. 发起最底层的 eth_call
-    let tx = TransactionRequest::new().to(pool_addr).data(Bytes::from(data));
-    match provider.call(&tx.into(), None).await {
-        Ok(bytes) => {
-            let hex_str = hex::encode(&bytes.0);
-            info!("✅ DEBUG SUCCESS: Data Len = {} bytes", bytes.0.len());
-            info!("📋 DEBUG HEX: {}", hex_str); // <--- 把这行输出发给我
-        },
-        Err(e) => {
-            error!("❌ DEBUG FAIL: {:?}", e);
-        }
-    }
 }
 
 fn sel4(sig: &str) -> [u8; 4] {
@@ -1014,28 +987,6 @@ async fn update_all_pools(
                             Ok(r) => r,
                             Err(e) => {
                                 warn!("Step 3 (Ticks) Failed: {:?}", e);
-
-                                // ============= [插入 DEBUG 代码] =============
-                                // 如果报错了，我们就抓一个 Aerodrome 的池子来调试
-                                for data in &step2_data {
-                                    if data.base.pool.protocol == 2 && !data.ticks_to_fetch.is_empty() {
-                                        let pool_addr = get_pool_address(data.base.pool).unwrap();
-                                        // 取第一个需要获取的 tick 来测试
-                                        let target_tick = data.ticks_to_fetch[0]; 
-                                        
-                                        // 调用 debug 函数 (需要 clone provider)
-                                        let provider_debug = provider.clone();
-                                        // Spawn 出去执行，不阻塞主线程
-                                        tokio::spawn(async move {
-                                            debug_ticks_raw(provider_debug, pool_addr, target_tick).await;
-                                        });
-                                        
-                                        // 只需要 debug 一次就够了，break
-                                        break; 
-                                    }
-                                }
-                                // ==========================================
-
                                 return;
                             }
                         }
@@ -1052,13 +1003,13 @@ async fn update_all_pools(
                                 let mut is_initialized = false;
 
                                 if data.base.pool.protocol == 2 {
-                                    // === Aerodrome CL Decoding (5 fields) ===
-                                    type AeroTickInfo = (u128, i128, U256, U256, bool);
-                                    if let Ok((_, ln, _, _, init)) = AeroTickInfo::from_token(token.clone()) {
+                                    // === Aerodrome CL Decoding (4 fields) ===
+                                    type AeroTickInfo = (u128, i128, U256, U256);
+                                    if let Ok((_, ln, _, _)) = AeroTickInfo::from_token(token.clone()) {
                                         liquidity_net_val = ln;
-                                        is_initialized = init;
+                                        is_initialized = true; // 既然是从 bitmap 查出来的，默认已初始化
                                     } else {
-                                        warn!("Failed to decode Aero ticks for pool {}", data.base.pool.name);
+                                        warn!("Failed to decode Aero ticks (4 fields) for pool {}", data.base.pool.name);
                                     }
                                 } else {
                                     // === Uniswap V3 Decoding (8 fields) ===
@@ -1403,11 +1354,11 @@ async fn sync_v3_pool_smart(
                 let mut is_initialized = false;
 
                 if pool.protocol == 2 {
-                    // === Aerodrome CL Decoding (5 fields) ===
-                    type AeroTickInfo = (u128, i128, U256, U256, bool);
-                    if let Ok((_, ln, _, _, init)) = AeroTickInfo::from_token(token.clone()) {
+                    // === Aerodrome CL Decoding (4 fields) ===
+                    type AeroTickInfo = (u128, i128, U256, U256);
+                    if let Ok((_, ln, _, _)) = AeroTickInfo::from_token(token.clone()) {
                         liquidity_net_val = ln;
-                        is_initialized = init;
+                        is_initialized = true;
                     }
                 } else {
                     // === Uniswap V3 Decoding (8 fields) ===
