@@ -740,9 +740,9 @@ async fn update_all_pools(
 
         // 1. Chunking to avoid RPC limits
         // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(1).collect();
+        let chunks: Vec<_> = v3_pools.chunks(25).collect();
         stream::iter(chunks)
-            .for_each_concurrent(20, |chunk| {
+            .for_each_concurrent(10, |chunk| {
                 let provider = provider.clone();
                 let cache = cache.clone();
                 // 需要克隆 chunk 中的数据以移动到 async 块中
@@ -916,7 +916,7 @@ async fn update_all_pools(
                         // 我们请求了 3 个 word: pos, pos-1, pos+1
                         // [Fix] 1. 缩小范围到 +/- 1 word
                         let mut words = Vec::new();
-                        for i in -1..=1 {
+                        for i in -5..=5 {
                             words.push(data.word_pos + i as i16);
                         }
 
