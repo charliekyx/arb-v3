@@ -159,6 +159,17 @@ abigen!(
         function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)
     ]"#;
 
+    IAerodromeCLPool,
+    r#"[
+        function tickSpacing() external view returns (int24)
+        function fee() external view returns (uint24)
+        function liquidity() external view returns (uint128)
+        function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, bool unlocked)
+        function token0() external view returns (address)
+        function tickBitmap(int16 wordPosition) external view returns (uint256)
+        function ticks(int24 tick) external view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)
+    ]"#;
+
     // Uniswap V2 是行业标准。绝大多数 V2 类 DEX（如 BaseSwap, SushiSwap, AlienBase）都完全复制了 Uniswap V2 的接口。
     // Aerodrome (以及它的前身 Velodrome/Solidly) 的 Pair 合约里额外包含了一个 getAmountOut 函数。
     // 在 Aerodrome 中称为 Basic/Volatile 和 Stable 池
@@ -384,36 +395,18 @@ async fn validate_cl_pool(
         _ => {}
     }
 
-    let contract = ICLPool::new(pool_addr, client.clone());
-    let ts = match contract.tick_spacing().call().await {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(
-                "CL Pool {} tickSpacing() failed @ {:?}: {:?}",
-                pool.name, pool_addr, e
-            );
-            return None;
-        }
-    };
-    let fee = match contract.fee().call().await {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(
-                "CL Pool {} fee() failed @ {:?}: {:?}",
-                pool.name, pool_addr, e
-            );
-            return None;
-        }
-    };
-    let liq = match contract.liquidity().call().await {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(
-                "CL Pool {} liquidity() failed @ {:?}: {:?}",
-                pool.name, pool_addr, e
-            );
-            return None;
-        }
+    let (ts, fee, liq) = if pool.protocol == 2 {
+        let contract = IAerodromeCLPool::new(pool_addr, client.clone());
+        let ts = contract.tick_spacing().call().await.ok()?;
+        let fee = contract.fee().call().await.ok()?;
+        let liq = contract.liquidity().call().await.ok()?;
+        (ts, fee, liq)
+    } else {
+        let contract = ICLPool::new(pool_addr, client.clone());
+        let ts = contract.tick_spacing().call().await.ok()?;
+        let fee = contract.fee().call().await.ok()?;
+        let liq = contract.liquidity().call().await.ok()?;
+        (ts, fee, liq)
     };
 
     // [核心修改] 3. 使用 Multicall 验证 slot0
@@ -423,7 +416,13 @@ async fn validate_cl_pool(
     // 创建一个临时的 Multicall 实例用于验证
     if let Ok(mut multicall) = Multicall::new(client.clone(), Some(multicall_address)).await {
         // 添加 slot0 调用，设置为 false (require success)，如果失败直接报错
-        multicall.add_call(contract.slot_0(), false);
+        if pool.protocol == 2 {
+            let contract = IAerodromeCLPool::new(pool_addr, client.clone());
+            multicall.add_call(contract.slot_0(), false);
+        } else {
+            let contract = ICLPool::new(pool_addr, client.clone());
+            multicall.add_call(contract.slot_0(), false);
+        }
 
         // 执行调用。如果 Multicall 返回错误，或者解码失败，说明该池子不兼容 Multicall
         if let Err(e) = multicall.call_raw().await {
@@ -764,9 +763,15 @@ async fn update_all_pools(
                         };
                         // 简单缓存检查：如果 block 没变且上次也没报错，可以跳过 (这里为了修复先略过)
 
-                        let v3_pool = ICLPool::new(address, provider.clone());
-                        multicall.add_call(v3_pool.slot_0(), true); // idx 0
-                        multicall.add_call(v3_pool.liquidity(), true); // idx 1
+                        if pool.protocol == 2 {
+                            let cl_pool = IAerodromeCLPool::new(address, provider.clone());
+                            multicall.add_call(cl_pool.slot_0(), true);
+                            multicall.add_call(cl_pool.liquidity(), true);
+                        } else {
+                            let v3_pool = ICLPool::new(address, provider.clone());
+                            multicall.add_call(v3_pool.slot_0(), true);
+                            multicall.add_call(v3_pool.liquidity(), true);
+                        }
                                                                        // 我们还不知道 tick 在哪，没法精准拿 Bitmap？
                                                                        // 这是一个“鸡生蛋”问题。
                                                                        // 解决方案：我们假设池子价格不会瞬间跳变太远。我们读取缓存中的旧 tick 来决定取哪个 Bitmap。
@@ -845,12 +850,24 @@ async fn update_all_pools(
                             Err(_) => continue,
                         };
 
-                        // Decode Slot0
-                        let slot0 =
+                        let (sqrt_price, current_tick) = if pool.protocol == 2 {
+                            match <(U256, i32, u16, u16, u16, bool)>::from_token(slot0_token) {
+                                Ok(s) => (s.0, s.1),
+                                Err(e) => {
+                                    warn!("Decode Aero CL slot0 failed for {}: {:?}", pool.name, e);
+                                    continue;
+                                }
+                            }
+                        } else {
                             match <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token) {
-                                Ok(s) => s,
-                                Err(_) => continue, // Bad pool, skip
-                            };
+                                Ok(s) => (s.0, s.1),
+                                Err(e) => {
+                                    warn!("Decode Uni V3 slot0 failed for {}: {:?}", pool.name, e);
+                                    continue;
+                                }
+                            }
+                        };
+
                         // Decode Liquidity
                         let liq_token = match liq_res {
                             Ok(t) => t.clone(),
@@ -858,25 +875,29 @@ async fn update_all_pools(
                         };
                         let liquidity = liq_token.into_uint().unwrap_or_default().as_u128();
 
-                        let current_tick = slot0.1;
                         let word_pos = (current_tick >> 8) as i16;
 
                         step1_data.push(Step1Data {
                             pool,
                             tick: current_tick,
                             liquidity,
-                            sqrt_price: slot0.0,
+                            sqrt_price,
                             word_pos,
                         });
 
-                        let v3_pool =
-                            ICLPool::new(get_pool_address(pool).unwrap(), provider.clone());
+                        let pool_addr = get_pool_address(pool).unwrap();
                         // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
                         // [Fix] 1. 缩小范围到 +/- 1 word (3个词，覆盖 +/- 256 ticks，足够了)
                         // 范围太大会导致包过大，Geth 依然会超时。
                         for i in -1..=1 {
                             // [Fix] 2. 把 true 改成 false！关闭 allow_failure，解决 InvalidData 解码错误。
-                            multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), false);
+                            if pool.protocol == 2 {
+                                let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
+                                multicall_2.add_call(cl_pool.tick_bitmap(word_pos + i as i16), false);
+                            } else {
+                                let v3_pool = ICLPool::new(pool_addr, provider.clone());
+                                multicall_2.add_call(v3_pool.tick_bitmap(word_pos + i as i16), false);
+                            }
                         }
                     }
 
@@ -916,7 +937,7 @@ async fn update_all_pools(
                         // 我们请求了 3 个 word: pos, pos-1, pos+1
                         // [Fix] 1. 缩小范围到 +/- 1 word
                         let mut words = Vec::new();
-                        for i in -2..=2 {
+                        for i in -1..=1 {
                             words.push(data.word_pos + i as i16);
                         }
 
@@ -938,10 +959,15 @@ async fn update_all_pools(
                         }
 
                         // 将需要获取的 ticks 加入 Call 3
-                        let v3_pool =
-                            ICLPool::new(get_pool_address(data.pool).unwrap(), provider.clone());
+                        let pool_addr = get_pool_address(data.pool).unwrap();
                         for &t in &ticks_to_fetch {
-                            multicall_3.add_call(v3_pool.ticks(t), true);
+                            if data.pool.protocol == 2 {
+                                let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
+                                multicall_3.add_call(cl_pool.ticks(t), true);
+                            } else {
+                                let v3_pool = ICLPool::new(pool_addr, provider.clone());
+                                multicall_3.add_call(v3_pool.ticks(t), true);
+                            }
                             ticks_call_count += 1;
                         }
 
@@ -1236,27 +1262,46 @@ async fn sync_v3_pool_smart(
         return Ok(());
     };
 
-    let v3_pool = ICLPool::new(pool_addr, provider.clone());
     let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
     
     // Step 1: Slot0 & Liquidity
     let mut multicall = Multicall::new(provider.clone(), Some(multicall_address)).await?;
-    multicall.add_call(v3_pool.slot_0(), false);
-    multicall.add_call(v3_pool.liquidity(), false);
+    if pool.protocol == 2 {
+        let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
+        multicall.add_call(cl_pool.slot_0(), false);
+        multicall.add_call(cl_pool.liquidity(), false);
+    } else {
+        let v3_pool = ICLPool::new(pool_addr, provider.clone());
+        multicall.add_call(v3_pool.slot_0(), false);
+        multicall.add_call(v3_pool.liquidity(), false);
+    }
 
     let res1 = multicall.call_raw().await?;
     let slot0_token = res1[0].clone().map_err(|e| anyhow!("Slot0 failed: {:?}", e))?;
-    let slot0 = <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token)?;
+    
+    let (sqrt_price, current_tick) = if pool.protocol == 2 {
+        let s = <(U256, i32, u16, u16, u16, bool)>::from_token(slot0_token)?;
+        (s.0, s.1)
+    } else {
+        let s = <(U256, i32, u16, u16, u16, u8, bool)>::from_token(slot0_token)?;
+        (s.0, s.1)
+    };
+
     let liquidity_token = res1[1].clone().map_err(|e| anyhow!("Liquidity failed: {:?}", e))?;
     let liquidity = liquidity_token.into_uint().unwrap_or_default().as_u128();
-    let current_tick = slot0.1;
     let word_pos = (current_tick >> 8) as i16;
 
     // Step 2: Bitmap (Current + Neighbors)
     let mut multicall2 = Multicall::new(provider.clone(), Some(multicall_address)).await?;
     let words = [word_pos, word_pos - 1, word_pos + 1];
     for &w in &words {
-        multicall2.add_call(v3_pool.tick_bitmap(w), false);
+        if pool.protocol == 2 {
+            let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
+            multicall2.add_call(cl_pool.tick_bitmap(w), false);
+        } else {
+            let v3_pool = ICLPool::new(pool_addr, provider.clone());
+            multicall2.add_call(v3_pool.tick_bitmap(w), false);
+        }
     }
     let res2 = multicall2.call_raw().await?;
 
@@ -1280,7 +1325,13 @@ async fn sync_v3_pool_smart(
     if !ticks_to_fetch.is_empty() {
         let mut multicall3 = Multicall::new(provider.clone(), Some(multicall_address)).await?;
         for &t in &ticks_to_fetch {
-            multicall3.add_call(v3_pool.ticks(t), false);
+            if pool.protocol == 2 {
+                let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
+                multicall3.add_call(cl_pool.ticks(t), false);
+            } else {
+                let v3_pool = ICLPool::new(pool_addr, provider.clone());
+                multicall3.add_call(v3_pool.ticks(t), false);
+            }
         }
         let res3 = multicall3.call_raw().await?;
         
@@ -1301,7 +1352,7 @@ async fn sync_v3_pool_smart(
         block_number: current_block,
         reserve0: 0,
         reserve1: 0,
-        sqrt_price_x96: slot0.0,
+        sqrt_price_x96: sqrt_price,
         liquidity,
         tick: current_tick,
         tick_spacing: pool.tick_spacing,
