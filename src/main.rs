@@ -558,7 +558,7 @@ fn add_delta(x: u128, y: i128) -> Result<u128> {
 fn get_v3_amount_out_local(
     amount_in: U256,
     token_in: Address,
-    token_out: Address,
+    _token_out: Address,
     pool: &PoolConfig,
     state: &CachedPoolState,
 ) -> Result<U256> {
@@ -780,11 +780,15 @@ async fn update_all_pools(
     let v3_task = async {
         let multicall_address = MULTICALL_ADDRESS.parse::<Address>().unwrap();
 
-        // 1. Chunking to avoid RPC limits
-        // 使用并发处理 stream
-        let chunks: Vec<_> = v3_pools.chunks(50).collect();
-        stream::iter(chunks)
-            .for_each_concurrent(10, |chunk| {
+        // [Debug 修改 1] 再次降低分块大小，从 50 -> 10，降低单次请求压力
+        let chunks: Vec<_> = v3_pools.chunks(10).collect();
+
+        // [Debug 修改 2] 使用 enumerate() 给每个块加个编号，方便追踪日志
+        let chunks_with_index: Vec<_> = chunks.into_iter().enumerate().collect();
+
+        // [Debug 修改 3] 降低并发度 10 -> 5
+        stream::iter(chunks_with_index)
+            .for_each_concurrent(5, |(chunk_idx, chunk)| {
                 let provider = provider.clone();
                 let cache = cache.clone();
                 // 需要克隆 chunk 中的数据以移动到 async 块中
@@ -804,7 +808,6 @@ async fn update_all_pools(
                         let Some(address) = get_pool_address(pool) else {
                             continue;
                         };
-                        // 简单缓存检查：如果 block 没变且上次也没报错，可以跳过 (这里为了修复先略过)
 
                         if pool.protocol == 2 {
                             let cl_pool = IAerodromeCLPool::new(address, provider.clone());
@@ -815,19 +818,6 @@ async fn update_all_pools(
                             multicall.add_call(v3_pool.slot_0(), true);
                             multicall.add_call(v3_pool.liquidity(), true);
                         }
-                                                                       // 我们还不知道 tick 在哪，没法精准拿 Bitmap？
-                                                                       // 这是一个“鸡生蛋”问题。
-                                                                       // 解决方案：我们假设池子价格不会瞬间跳变太远。我们读取缓存中的旧 tick 来决定取哪个 Bitmap。
-                                                                       // 如果缓存里没有（第一次启动），我们只能先不取 Bitmap，等下一轮？
-                                                                       // 不，更稳妥的方法是：分两步走。先拿 slot0，再拿 Bitmap + Ticks。
-                                                                       // 但是为了性能，我们这里还是得牺牲一点：
-                                                                       // [方案 B]：只在一轮 Multicall 里做完所有事是不可能的，因为我们需要 Tick 来查 Bitmap。
-                                                                       // 所以：
-                                                                       // 1. Multicall (Slot0) -> 得到 Current Tick
-                                                                       // 2. Multicall (Bitmap Words around Current Tick) -> 得到 Initialized Ticks
-                                                                       // 3. Multicall (Ticks Data) -> 得到 Liquidity Net
-                                                                       // 这就是标准的 V3 同步逻辑。虽然有 3 次 RTT，但数据绝对精准。
-
                         pre_updates.push(pool);
                     }
 
@@ -835,25 +825,14 @@ async fn update_all_pools(
                         return;
                     }
 
-                    // === Step 1: Get Slot0 (Current Tick) ===
-                    // 为了快，我们直接把 Step 1 和 Step 2 合并的优化先放一边，先保证正确性。
-                    // 其实很多 Bot 是把所有步骤拆开并发的。
-
-                    // 这里我们稍微 Hack 一下：
-                    // 我们还是发 2 个 Multicall。
-                    // 1. Slot0 + Liquidity + (Blind Guess Bitmap)
-                    //    不，猜 Bitmap 太难。
-                    //    我们还是老老实实地：
-                    //    Call 1: Slot0 + Liquidity
-                    //    Call 2: Bitmap (根据 Slot0 的 tick)
-                    //    Call 3: Ticks (根据 Bitmap 的结果)
-                    //    虽然慢一点点，但是绝对不会报错 MISSING DATA。
+                    // [LOG] Start Step 1
+                    info!("[Chunk {}] Step 1: Fetching Slot0/Liq for {} pools...", chunk_idx, chunk_owned.len());
 
                     // 执行 Call 1
                     let results_1 = match multicall.call_raw().await {
                         Ok(r) => r,
                         Err(e) => {
-                            warn!("Step 1 RPC Failed for chunk (size {}): {:?}. Skipped.", chunk_owned.len(), e);
+                            warn!("[Chunk {}] Step 1 FAILED: {:?}. Skipped.", chunk_idx, e);
                             return;
                         }
                     };
@@ -861,7 +840,8 @@ async fn update_all_pools(
                     // 检查数据是否完整
                     if results_1.len() != chunk_owned.len() * 2 {
                         warn!(
-                            "Step 1 Partial Data: Expected {} but got {}. Skipped.",
+                            "[Chunk {}] Step 1 Partial Data: Expected {} but got {}. Skipped.",
+                            chunk_idx,
                             chunk_owned.len() * 2,
                             results_1.len()
                         );
@@ -877,9 +857,11 @@ async fn update_all_pools(
 
                     struct Step1Data<'a> {
                         pool: &'a PoolConfig,
-                        tick: i32,
-                        liquidity: u128,
+                        // tick: i32, // Unused
+                        // liquidity: u128, // Unused
                         sqrt_price: U256,
+                        liquidity_val: u128, // Renamed to avoid confusion
+                        tick_val: i32, // Renamed
                         word_pos: i16,
                     }
                     let mut step1_data = Vec::new();
@@ -922,18 +904,14 @@ async fn update_all_pools(
 
                         step1_data.push(Step1Data {
                             pool,
-                            tick: current_tick,
-                            liquidity,
+                            tick_val: current_tick,
+                            liquidity_val: liquidity,
                             sqrt_price,
                             word_pos,
                         });
 
                         let pool_addr = get_pool_address(pool).unwrap();
-                        // 获取当前 tick 所在的 Word，以及前后各 1 个 Word (覆盖 +/- 256 ticks)
-                        // [Fix] 1. 缩小范围到 +/- 1 word (3个词，覆盖 +/- 256 ticks，足够了)
-                        // 范围太大会导致包过大，Geth 依然会超时。
                         for i in -1..=1 {
-                            // [Fix] 2. 把 true 改成 false！关闭 allow_failure，解决 InvalidData 解码错误。
                             if pool.protocol == 2 {
                                 let cl_pool = IAerodromeCLPool::new(pool_addr, provider.clone());
                                 multicall_2.add_call(cl_pool.tick_bitmap(word_pos + i as i16), false);
@@ -948,11 +926,14 @@ async fn update_all_pools(
                         return;
                     }
 
+                    // [LOG] Start Step 2
+                    info!("[Chunk {}] Step 2: Fetching Bitmaps...", chunk_idx);
+
                     // 执行 Call 2
                     let results_2 = match multicall_2.call_raw().await {
                         Ok(r) => r,
                         Err(e) => {
-                            warn!("Step 2 (Bitmap) Failed: {:?}", e);
+                            warn!("[Chunk {}] Step 2 (Bitmap) Failed: {:?}", chunk_idx, e);
                             return;
                         }
                     };
@@ -977,22 +958,17 @@ async fn update_all_pools(
                         let mut bitmap_cache = HashMap::new();
                         let mut ticks_to_fetch = Vec::new();
 
-                        // 我们请求了 3 个 word: pos, pos-1, pos+1
-                        // [Fix] 1. 缩小范围到 +/- 1 word
                         let mut words = Vec::new();
                         for i in -1..=1 {
                             words.push(data.word_pos + i as i16);
                         }
 
                         for &w in &words {
-                            // [Fix] Since allow_failure is false, results_2 contains Tokens directly
                             if let Some(Ok(token)) = results_2.get(res2_idx) {
                                 if let Some(bitmap_val) = token.clone().into_uint() {
                                     bitmap_cache.insert(w, bitmap_val);
-                                    // 解析出所有 initialized ticks
                                     let initialized =
                                         get_initialized_ticks_from_bitmap(w, bitmap_val);
-                                    // 过滤：只关心 tick_spacing 的整数倍 (虽然 bitmap 里的通常都是，但双重保险)
                                     let ts = data.pool.tick_spacing;
                                     for t in initialized {
                                         ticks_to_fetch.push(t * ts);
@@ -1022,19 +998,24 @@ async fn update_all_pools(
                         });
                     }
 
+                    // [LOG] Start Step 3 (CRITICAL)
+                    // 这里最重要：如果 ticks_call_count 很大（比如 > 1000），节点就会在这里卡住
+                    info!("[Chunk {}] Step 3: Fetching {} Ticks detail...", chunk_idx, ticks_call_count);
+
                     // 执行 Call 3
-                    // 如果没有任何 tick 需要获取（极端冷门池子），这里可能会空，需要判断
                     let results_3 = if ticks_call_count == 0 {
                         Vec::new()
                     } else {
                         match multicall_3.call_raw().await {
                             Ok(r) => r,
                             Err(e) => {
-                                warn!("Step 3 (Ticks) Failed: {:?}", e);
+                                warn!("[Chunk {}] Step 3 (Ticks) Failed: {:?}", chunk_idx, e);
                                 return;
                             }
                         }
                     };
+
+                    info!("[Chunk {}] Step 3 Done. Processing results...", chunk_idx);
 
                     // === Final Step: Update Cache ===
                     let mut res3_idx = 0;
@@ -1051,7 +1032,7 @@ async fn update_all_pools(
                                     type AeroTickInfo = (u128, i128, U256, U256);
                                     if let Ok((_, ln, _, _)) = AeroTickInfo::from_token(token.clone()) {
                                         liquidity_net_val = ln;
-                                        is_initialized = true; // 既然是从 bitmap 查出来的，默认已初始化
+                                        is_initialized = true; 
                                     } else {
                                         warn!("Failed to decode Aero ticks (4 fields) for pool {}", data.base.pool.name);
                                     }
@@ -1079,14 +1060,16 @@ async fn update_all_pools(
                                 reserve0: 0,
                                 reserve1: 0,
                                 sqrt_price_x96: data.base.sqrt_price,
-                                liquidity: data.base.liquidity,
-                                tick: data.base.tick,
+                                liquidity: data.base.liquidity_val,
+                                tick: data.base.tick_val,
                                 tick_spacing: data.base.pool.tick_spacing,
                                 ticks: ticks_map,
-                                tick_bitmap: data.bitmap_cache, // 关键：现在我们有了 Bitmap！
+                                tick_bitmap: data.bitmap_cache, 
                             },
                         );
                     }
+                    
+                    info!("[Chunk {}] FINISHED.", chunk_idx);
                 }
             })
             .await;
