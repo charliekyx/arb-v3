@@ -588,7 +588,18 @@ fn get_v3_amount_out_local(
     let mut amount_calculated = I256::zero();
     let tick_spacing = state.tick_spacing;
 
+    // [新增] 安全保险丝：防止死循环
+    let mut loop_safety_counter = 0;
+    const MAX_TICKS_CROSS: i32 = 100; // 最多允许跨越 100 个 Tick，超过直接报错
+
     while amount_remaining > I256::zero() {
+        // [新增] 检查循环次数
+        loop_safety_counter += 1;
+        if loop_safety_counter > MAX_TICKS_CROSS {
+            // 这是一个保护机制，防止程序卡死
+            return Err(anyhow!("Safety Fuse: Too many ticks crossed (>100) for pool {}", pool.name));
+        }
+
         let (mut next_tick, initialized) = next_initialized_tick_within_one_word(
             &state.tick_bitmap,
             current_tick,
