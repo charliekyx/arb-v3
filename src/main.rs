@@ -1907,16 +1907,20 @@ async fn main() -> Result<()> {
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let profitable_paths = Arc::new(AtomicUsize::new(0));
         let _failed_paths = Arc::new(AtomicUsize::new(0));
+        // [新增] 计数器，用于显示进度
+        let processed_count = Arc::new(AtomicUsize::new(0));
 
         let ok_paths_ref = ok_paths.clone();
         let profitable_paths_ref = profitable_paths.clone();
         // let pool_failures_ref = pool_failures.clone(); // Unused in this updated block
         let all_pools_ref = all_pools_arc.clone();
         let flash_loan_tokens_ref = flash_loan_tokens.clone();
+        let processed_count_ref = processed_count.clone(); // Clone for async block
 
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
+        // [修改] 将并发度从 500 降低到 64。
         stream::iter(candidates.clone())
-            .for_each_concurrent(500, |path| {
+            .for_each_concurrent(64, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
                 let client = client_ref.clone();
@@ -1925,8 +1929,35 @@ async fn main() -> Result<()> {
                 let cache = cache.clone();
                 let provider = provider.clone();
                 let flash_loan_tokens = flash_loan_tokens_ref.clone();
+                let processed_ref = processed_count_ref.clone();
 
                 async move {
+                    // [新增] 进度打印：每完成 2000 条路径打印一次
+                    let current_count = processed_ref.fetch_add(1, Ordering::Relaxed);
+                    if current_count % 2000 == 0 && current_count > 0 {
+                        info!("Calculated {} / {} paths...", current_count, total_candidates);
+                    }
+
+                    // [新增] 快速检查：如果路径中任何一个池子流动性太低，直接跳过计算，节省 CPU
+                    // 假设 V3 liquidity < 10000 (极小值) 或者 V2 reserve < 0.01 ETH 就跳过
+                    for pool in &path.pools {
+                        if let Some(addr) = get_pool_address(pool) {
+                            if let Some(state) = cache.get(&addr) {
+                                // 如果是 V3 且流动性为 0，跳过
+                                if pool.protocol != 1 && state.liquidity == 0 {
+                                    return;
+                                }
+                                // 如果是 V2 且储备量极低，跳过 (简单判断 reserve0)
+                                if pool.protocol == 1 && state.reserve0 < 1_000_000 { // 随意设个阈值
+                                    return;
+                                }
+                            } else {
+                                // 如果缓存里没有数据，跳过
+                                return;
+                            }
+                        }
+                    }
+
                     let mut final_tokens = path.tokens.clone();
                     let mut final_pools = path.pools.clone();
 
