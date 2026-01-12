@@ -575,7 +575,17 @@ fn get_v3_amount_out_local(
     let mut current_liquidity = state.liquidity;
     let mut amount_remaining = I256::from_raw(amount_in);
     let mut amount_calculated = I256::zero();
-    let fee_pips = pool.fee as u32;
+
+    // 针对 Aerodrome (protocol 2)，必须使用 pool_fee (真实费率)，而不是 fee (tickSpacing)
+    let fee_pips = if pool.protocol == 2 {
+        if pool.pool_fee > 0 {
+            pool.pool_fee
+        } else {
+            3000 // Fallback: 0.3%
+        }
+    } else {
+        pool.fee
+    };
 
     while amount_remaining > I256::zero() {
         let (next_tick, initialized) = next_initialized_tick_within_one_word(
