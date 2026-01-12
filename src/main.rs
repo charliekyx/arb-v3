@@ -1173,12 +1173,18 @@ async fn optimize_amount_in(
     current_block: U64,
 ) -> Option<(U256, I256)> {
     let one_unit = U256::from(10).pow(start_token_decimals.into());
-    let mut low = one_unit * 10;
-    let mut high = one_unit * 100_000;
+    let start_token = path.tokens[0];
+    let weth = Address::from_str(WETH_ADDR).unwrap();
+    let mut high = if start_token == weth {
+        one_unit * 10
+    } else {
+        one_unit * 50_000
+    };
+    let mut low = one_unit / 100;
 
     let phi_num = 618;
     let phi_den = 1000;
-    let iterations = 10;
+    let iterations = 8;
 
     let calc_profit = |amt: U256| {
         let pools = path.pools.clone();
@@ -1936,9 +1942,9 @@ async fn main() -> Result<()> {
                 let processed_ref = processed_count_ref.clone();
 
                 async move {
-                    // [新增] 进度打印：每完成 2000 条路径打印一次
+                    // [新增] 进度打印：每完成 100 条路径打印一次
                     let current_count = processed_ref.fetch_add(1, Ordering::Relaxed);
-                    if current_count % 2000 == 0 && current_count > 0 {
+                    if current_count % 100 == 0 && current_count > 0 {
                         info!("Calculated {} / {} paths...", current_count, total_candidates);
                     }
 
