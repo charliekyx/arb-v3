@@ -588,12 +588,23 @@ fn get_v3_amount_out_local(
     };
 
     while amount_remaining > I256::zero() {
-        let (next_tick, initialized) = next_initialized_tick_within_one_word(
+        let (next_tick_raw, initialized) = next_initialized_tick_within_one_word(
             &state.tick_bitmap,
             current_tick,
             state.tick_spacing,
             zero_for_one,
         )?;
+
+        let mut next_tick = next_tick_raw;
+        // [FIX] 强制对齐 Tick Spacing: 如果是已初始化的 tick 且在 map 中找不到，尝试乘 tick_spacing
+        if initialized {
+            if !state.ticks.contains_key(&next_tick) {
+                let multiplied_tick = next_tick * state.tick_spacing;
+                if state.ticks.contains_key(&multiplied_tick) {
+                    next_tick = multiplied_tick;
+                }
+            }
+        }
 
         let sqrt_price_limit_x96 = tick_math::get_sqrt_ratio_at_tick(next_tick)?;
 
