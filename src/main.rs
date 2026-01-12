@@ -1508,13 +1508,13 @@ async fn main() -> Result<()> {
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
 
         // [DEBUG] 临时屏蔽 V3 和 CL 池子，仅保留 V2 进行压力测试和故障排查
-        // if proto_str == "v3" || proto_str == "cl" {
-        //     continue;
-        // }
-
-        if proto_str == "v2" {
+        if proto_str == "v3" || proto_str == "cl" {
             continue;
         }
+
+        // if proto_str == "v2" {
+        //     continue;
+        // }
 
         let proto_code = if proto_str == "v2" {
             1
