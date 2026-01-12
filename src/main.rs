@@ -748,7 +748,7 @@ async fn update_all_pools(
             let Some(address) = get_pool_address(pool) else {
                 return;
             };
-            
+
             // 简单检查缓存
             if cache
                 .get(&address)
@@ -757,12 +757,16 @@ async fn update_all_pools(
                 return;
             }
 
-            // [LOG] Start V2
-            // info!("Syncing V2 Pool: {}", pool.name); 
+            info!("Syncing V2 Pool: {}", pool.name);
 
             let pair = IUniswapV2Pair::new(address, provider);
-            match pair.get_reserves().call().await {
-                Ok((r0, r1, _)) => {
+            // [新增] 给单个 V2 池子加超时
+            let call_with_timeout =
+                tokio::time::timeout(Duration::from_secs(2), pair.get_reserves().call()).await;
+
+            match call_with_timeout {
+                Ok(Ok((r0, r1, _))) => {
+                    // Timeout 成功, Call 成功
                     cache.insert(
                         address,
                         CachedPoolState {
@@ -778,8 +782,13 @@ async fn update_all_pools(
                         },
                     );
                 }
-                Err(e) => {
-                    warn!("V2 Pool {} sync failed: {:?}", pool.name, e);
+                Ok(Err(e)) => {
+                    // Timeout 成功, Call 失败
+                    warn!("V2 Pool {} sync failed (RPC Error): {:?}", pool.name, e);
+                }
+                Err(_) => {
+                    // Timeout 失败
+                    warn!("V2 Pool {} sync TIMEOUT.", pool.name);
                 }
             }
         }
@@ -1870,6 +1879,8 @@ async fn main() -> Result<()> {
             // 即使超时，缓存里可能已经更新了一部分数据，依然可以尝试跑套利计算，或者直接 continue
             // 这里为了安全，建议继续往下跑（因为可能有部分池子已经更新了）
         }
+
+        info!("Sync done for block {}. Searching for opportunities...", block_number);
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("Daily Gas Limit Reached.");
