@@ -1175,16 +1175,12 @@ async fn optimize_amount_in(
     let one_unit = U256::from(10).pow(start_token_decimals.into());
     let start_token = path.tokens[0];
     let weth = Address::from_str(WETH_ADDR).unwrap();
-    let mut high = if start_token == weth {
-        one_unit * 10
-    } else {
-        one_unit * 50_000
-    };
-    let mut low = one_unit / 100;
+   let mut high = one_unit * 5; 
+    let mut low = one_unit / 100; // 0.01
 
     let phi_num = 618;
     let phi_den = 1000;
-    let iterations = 8;
+    let iterations = 6;
 
     let calc_profit = |amt: U256| {
         let pools = path.pools.clone();
