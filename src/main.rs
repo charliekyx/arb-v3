@@ -740,13 +740,16 @@ async fn update_all_pools(
 
     // 1. Handle V2 pools with concurrent calls (they are few and simple)
     let v2_pools: Vec<_> = pools.iter().filter(|p| p.protocol == 1).collect();
-    let v2_stream = stream::iter(v2_pools).for_each_concurrent(50, |pool| {
+    // [修改] 降低并发度 50 -> 10，并添加日志
+    let v2_stream = stream::iter(v2_pools).for_each_concurrent(10, |pool| {
         let provider = provider.clone();
         let cache = cache.clone();
         async move {
             let Some(address) = get_pool_address(pool) else {
                 return;
             };
+            
+            // 简单检查缓存
             if cache
                 .get(&address)
                 .map_or(false, |s| s.block_number == current_block)
@@ -754,22 +757,30 @@ async fn update_all_pools(
                 return;
             }
 
+            // [LOG] Start V2
+            // info!("Syncing V2 Pool: {}", pool.name); 
+
             let pair = IUniswapV2Pair::new(address, provider);
-            if let Ok((r0, r1, _)) = pair.get_reserves().call().await {
-                cache.insert(
-                    address,
-                    CachedPoolState {
-                        block_number: current_block,
-                        reserve0: r0,
-                        reserve1: r1,
-                        sqrt_price_x96: U256::zero(),
-                        liquidity: 0,
-                        tick: 0,
-                        tick_spacing: 0,
-                        ticks: HashMap::new(),
-                        tick_bitmap: HashMap::new(),
-                    },
-                );
+            match pair.get_reserves().call().await {
+                Ok((r0, r1, _)) => {
+                    cache.insert(
+                        address,
+                        CachedPoolState {
+                            block_number: current_block,
+                            reserve0: r0,
+                            reserve1: r1,
+                            sqrt_price_x96: U256::zero(),
+                            liquidity: 0,
+                            tick: 0,
+                            tick_spacing: 0,
+                            ticks: HashMap::new(),
+                            tick_bitmap: HashMap::new(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    warn!("V2 Pool {} sync failed: {:?}", pool.name, e);
+                }
             }
         }
     });
@@ -1846,7 +1857,19 @@ async fn main() -> Result<()> {
         let block_number = current_bn.as_u64();
 
         info!("Block {}: Syncing pool states...", block_number);
-        update_all_pools(provider.clone(), &active_pools_config, cache.clone(), current_bn).await;
+        
+        // [修改] 使用 tokio::time::timeout 包裹 update_all_pools
+        // 如果同步超过 6 秒还没完成，强制停止并跳过，进入下一个区块逻辑
+        let sync_result = tokio::time::timeout(
+            Duration::from_secs(6), 
+            update_all_pools(provider.clone(), &active_pools_config, cache.clone(), current_bn)
+        ).await;
+
+        if let Err(_) = sync_result {
+            warn!("⚠️ Sync TIMEOUT for Block {}. Skipping to keep alive.", block_number);
+            // 即使超时，缓存里可能已经更新了一部分数据，依然可以尝试跑套利计算，或者直接 continue
+            // 这里为了安全，建议继续往下跑（因为可能有部分池子已经更新了）
+        }
 
         if gas_manager.get_loss() >= MAX_DAILY_GAS_LOSS_WEI {
             error!("Daily Gas Limit Reached.");
