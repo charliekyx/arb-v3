@@ -562,38 +562,25 @@ fn get_v3_amount_out_local(
     pool: &PoolConfig,
     state: &CachedPoolState,
 ) -> Result<U256> {
-    // 1. 基础状态检查
-    if amount_in.is_zero() {
-        return Ok(U256::zero());
-    }
-    if state.liquidity == 0 {
-        // 如果当前流动性为0，无法进行任何交换
-        return Ok(U256::zero());
-    }
-    if state.tick_spacing == 0 {
+    if amount_in.is_zero() || state.liquidity == 0 || state.tick_spacing == 0 {
         return Ok(U256::zero());
     }
 
-    // 2. 严格确定 zero_for_one
-    // Uniswap V3 中，token0 永远是地址较小的那个
-    // 我们不能假设 pool.token_a 就是 token0，必须动态判断
+    // 1. 严格判断 zero_for_one (基于地址大小)
     let (token0, _token1) = if pool.token_a < pool.token_b {
         (pool.token_a, pool.token_b)
     } else {
         (pool.token_b, pool.token_a)
     };
-    
-    // 如果输入代币是 token0，则是 zero_for_one (向左移动，价格变低，tick 变小)
     let zero_for_one = token_in == token0;
 
-    // 3. 确定费率 (Aerodrome 兼容)
+    // 2. Aerodrome 费率兼容
     let fee_pips = if pool.protocol == 2 {
-        if pool.pool_fee > 0 { pool.pool_fee } else { 3000 } // Aerodrome fallback
+        if pool.pool_fee > 0 { pool.pool_fee } else { 3000 }
     } else {
         pool.fee
     };
 
-    // 4. 初始化计算状态
     let mut current_sqrt_price_x96 = state.sqrt_price_x96;
     let mut current_tick = state.tick;
     let mut current_liquidity = state.liquidity;
@@ -601,9 +588,7 @@ fn get_v3_amount_out_local(
     let mut amount_calculated = I256::zero();
     let tick_spacing = state.tick_spacing;
 
-    // 5. 循环跨越 Tick (Swap Loop)
     while amount_remaining > I256::zero() {
-        // A. 寻找下一个初始化的 Tick
         let (mut next_tick, initialized) = next_initialized_tick_within_one_word(
             &state.tick_bitmap,
             current_tick,
@@ -611,44 +596,50 @@ fn get_v3_amount_out_local(
             zero_for_one,
         )?;
 
-        // [CRITICAL FIX]: 强制修正 Tick 对齐
-        // uniswap_v3_math 库有时返回未对齐的 tick，或者我们需要处理压缩映射
-        // 这里的逻辑是：如果这是一个已初始化的 tick，它必须能被 tick_spacing 整除
-        // 如果不能，或者我们在 cache 里找不到它，我们尝试乘回 tick_spacing
+        // ================= [CRITICAL FIX] =================
+        // 强制修正 next_tick：无论是否 initialized，如果它是压缩的，必须乘回去。
+        // 判断标准：
+        // 1. 如果它是 initialized，且 Cache 里找不到原值，但能找到乘过的值 -> 乘。
+        // 2. 如果它未 initialized (边界值)，但数值离 current_tick 太远(数量级差异) -> 乘。
+        
+        let mut needs_fix = false;
+
         if initialized {
-            // 场景 1: next_tick 是压缩的 (Compressed)，Cache 是真实的 (Real)
-            // 比如 spacing=10, next_tick=20 (raw), 但我们需要 200
+            // 如果已初始化，必须能在 Cache 中找到
             if !state.ticks.contains_key(&next_tick) {
                 let multiplied = next_tick * tick_spacing;
                 if state.ticks.contains_key(&multiplied) {
-                    next_tick = multiplied;
+                    needs_fix = true;
                 }
             }
         } else {
-            // 场景 2: 未初始化，这是一个 Word 边界
-            // 如果 next_tick 非常小（绝对值），而 current_tick 非常大，说明 next_tick 是压缩后的边界
-            // 我们通过简单的启发式规则来修正：如果两者数量级差异过大且 next_tick 未对齐
-            if next_tick.abs() * 10 < current_tick.abs() && tick_spacing > 1 {
-                 next_tick *= tick_spacing;
+            // 如果未初始化（Word 边界），通过距离判断
+            // 正常情况下，next_tick 应该在 current_tick 附近 +/- 256 * spacing 范围内
+            // 如果 spacing > 1 (比如 60)，且 next_tick 没有乘，它的值会非常小。
+            // 举例：current=200, spacing=10. next_compressed=21. next_real=210.
+            // 21 vs 210, 差距很大。
+            if tick_spacing > 1 {
+                let diff_raw = (current_tick - next_tick).abs();
+                let diff_multiplied = (current_tick - (next_tick * tick_spacing)).abs();
+                
+                // 如果乘了之后，距离更合理（更小），说明它是压缩的
+                if diff_multiplied < diff_raw {
+                    needs_fix = true;
+                }
             }
         }
 
-        // B. 确保 next_tick 不会超出限制
-        // 如果 next_tick 比 limit 还要远，就只算到 limit
-        let sqrt_price_limit_x96 = if zero_for_one {
-            tick_math::MIN_SQRT_RATIO + U256::one()
-        } else {
-            tick_math::MAX_SQRT_RATIO - U256::one()
-        };
-        
-        // 此时 next_tick 对应的价格
-        let sqrt_price_next_tick_x96 = tick_math::get_sqrt_ratio_at_tick(next_tick)?;
+        if needs_fix {
+            next_tick *= tick_spacing;
+        }
+        // ==================================================
 
-        // C. 在当前区间内计算 Swap
+        let sqrt_price_limit_x96 = tick_math::get_sqrt_ratio_at_tick(next_tick)?;
+
         let (sqrt_price_next_x96, amount_in_consumed, amount_out_received, _fee_amount) =
             compute_swap_step(
                 current_sqrt_price_x96,
-                sqrt_price_next_tick_x96, // 目标价格是下一个 tick 的价格
+                sqrt_price_limit_x96,
                 current_liquidity,
                 amount_remaining,
                 fee_pips,
@@ -658,31 +649,21 @@ fn get_v3_amount_out_local(
         amount_remaining -= I256::from_raw(amount_in_consumed);
         amount_calculated -= I256::from_raw(amount_out_received);
 
-        // D. 判断是否穿过 Tick
-        // 如果我们不仅到达了 next_tick 的价格，而且还有剩余金额，或者正好完全耗尽
-        // 我们需要判定是否需要更新流动性
-        if current_sqrt_price_x96 == sqrt_price_next_tick_x96 {
+        if current_sqrt_price_x96 == sqrt_price_limit_x96 {
             if initialized {
-                // 我们确实穿过了一个已初始化的 Tick，需要更新流动性
                 let liquidity_net = state.ticks.get(&next_tick).ok_or_else(|| {
-                    // 这是一个非常重要的保护措施：如果数据缺失，直接报错，不要瞎算！
-                    // 这会阻止 Bot 发送必亏的交易。
-                    anyhow!("Missing liquidity data for tick {}", next_tick)
+                    // 只有这里报 Missing Tick 才是真的缺失
+                    anyhow!("Tick Data Missing: {}", next_tick)
                 })?;
 
                 if zero_for_one {
-                    // 向下穿过：tick 减小
                     current_tick = next_tick - 1;
-                    // 向左穿过 Tick，Liquidity 应该 *减去* liquidityNet
                     current_liquidity = add_delta(current_liquidity, -liquidity_net)?;
                 } else {
-                    // 向上穿过：tick 增加
                     current_tick = next_tick;
-                    // 向右穿过 Tick，Liquidity 应该 *加上* liquidityNet
                     current_liquidity = add_delta(current_liquidity, *liquidity_net)?;
                 }
             } else {
-                // 只是到了一个 Word 的边界，或者未初始化的 Tick，流动性不变，继续走
                 current_tick = if zero_for_one {
                     next_tick - 1
                 } else {
@@ -690,20 +671,17 @@ fn get_v3_amount_out_local(
                 };
             }
         } else {
-            // 没有到达 Next Tick，钱就用完了 (amount_remaining == 0)
-            // 不需要更新 current_tick，直接退出
+            let _ = tick_math::get_tick_at_sqrt_ratio(current_sqrt_price_x96)?;
             break;
         }
 
-        // 安全检查：如果流动性变为了 0 且还有钱没换完，必须停止，否则除零错误
-        if current_liquidity == 0 && amount_remaining > I256::zero() {
+        if current_liquidity == 0 {
             break;
         }
     }
 
     Ok(amount_calculated.abs().into_raw())
 }
-
 // The Main Pricing Function: Reads from Memory Cache
 async fn get_amount_out(
     amount_in: U256,
