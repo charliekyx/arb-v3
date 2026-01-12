@@ -1512,6 +1512,10 @@ async fn main() -> Result<()> {
         //     continue;
         // }
 
+        if proto_str == "v2" {
+            continue;
+        }
+
         let proto_code = if proto_str == "v2" {
             1
         } else if proto_str == "cl" {
