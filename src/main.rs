@@ -1458,6 +1458,12 @@ async fn main() -> Result<()> {
         let pool_addr = cfg.pool.as_ref().map(|s| Address::from_str(s).unwrap());
 
         let proto_str = cfg.protocol.unwrap_or("v3".to_string()).to_lowercase();
+
+        // [DEBUG] 临时屏蔽 V3 和 CL 池子，仅保留 V2 进行压力测试和故障排查
+        if proto_str == "v3" || proto_str == "cl" {
+            continue;
+        }
+
         let proto_code = if proto_str == "v2" {
             1
         } else if proto_str == "cl" {
