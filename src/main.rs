@@ -567,8 +567,14 @@ fn get_v3_amount_out_local(
         return Ok(U256::zero());
     }
 
-    // zero_for_one: token0 -> token1 (价格向下, tick 变小)
-    let zero_for_one = token_in < token_out;
+    // [FIX START] 正确判断 token0 和 zero_for_one
+    // Uniswap 规则: token0 是地址较小的那个
+    let (token0, _token1) = if pool.token_a < pool.token_b {
+        (pool.token_a, pool.token_b)
+    } else {
+        (pool.token_b, pool.token_a)
+    };
+    let zero_for_one = token_in == token0;
 
     let mut current_sqrt_price_x96 = state.sqrt_price_x96;
     let mut current_tick = state.tick;
@@ -588,15 +594,13 @@ fn get_v3_amount_out_local(
     };
 
     while amount_remaining > I256::zero() {
-        let (next_tick_raw, initialized) = next_initialized_tick_within_one_word(
+        let (mut next_tick, initialized) = next_initialized_tick_within_one_word(
             &state.tick_bitmap,
             current_tick,
             state.tick_spacing,
             zero_for_one,
         )?;
 
-        let mut next_tick = next_tick_raw;
-        // [FIX] 强制对齐 Tick Spacing: 如果是已初始化的 tick 且在 map 中找不到，尝试乘 tick_spacing
         if initialized {
             if !state.ticks.contains_key(&next_tick) {
                 let multiplied_tick = next_tick * state.tick_spacing;
@@ -605,7 +609,6 @@ fn get_v3_amount_out_local(
                 }
             }
         }
-
         let sqrt_price_limit_x96 = tick_math::get_sqrt_ratio_at_tick(next_tick)?;
 
         let (sqrt_price_next_x96, amount_in_consumed, amount_out_received, _fee_amount) =
@@ -633,6 +636,13 @@ fn get_v3_amount_out_local(
                     anyhow!("Tick data missing for tick: {}", next_tick)
                 })?;
 
+                let ts = if pool.protocol == 2 {
+                    // 之前修复的逻辑：Aerodrome 使用 pool_fee 作为 tick_spacing
+                    // 或者是你在 CachedPoolState 里存好的 tick_spacing
+                    state.tick_spacing as i32
+                } else {
+                    pool.tick_spacing as i32
+                };
                 if zero_for_one {
                     current_tick = next_tick - 1;
                     current_liquidity = add_delta(current_liquidity, -liquidity_net)?;
@@ -641,9 +651,9 @@ fn get_v3_amount_out_local(
                     current_liquidity = add_delta(current_liquidity, *liquidity_net)?;
                 }
             } else {
-                current_tick = if zero_for_one {
+               current_tick = if zero_for_one {
                     next_tick - 1
-                } else {
+               } else {
                     next_tick
                 };
             }
