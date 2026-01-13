@@ -122,6 +122,22 @@ struct OpportunityLog {
     can_price_gas: bool,
     steps: Vec<StepLog>,
 }
+
+// [新增] 性能指标结构体
+#[derive(Serialize, Debug, Clone)]
+struct BlockMetrics {
+    block_number: u64,
+    timestamp: String,
+    sync_ms: u128,
+    calc_ms: u128,
+    total_ms: u128,
+    total_paths: usize,
+    skip_liq: usize,
+    skip_pre: usize,
+    skip_opt: usize,
+    profit: usize,
+}
+
 // --- ABI Definitions ---
 abigen!(
     // 必须调用 Uniswap 官方的 QuoterV2 合约的 quoteExactInputSingle 函数。
@@ -276,6 +292,15 @@ fn append_log_to_file(msg: &str) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(file, "[{}] {}", timestamp, msg);
+    }
+}
+
+fn append_metrics(metrics: &BlockMetrics) {
+    let file_path = "metrics.jsonl";
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) {
+        if let Ok(json) = serde_json::to_string(metrics) {
+            let _ = writeln!(file, "{}", json);
+        }
     }
 }
 
@@ -768,8 +793,6 @@ async fn update_all_pools(
                 return;
             }
 
-            info!("Syncing V2 Pool: {}", pool.name);
-
             let pair = IUniswapV2Pair::new(address, provider);
             // [新增] 给单个 V2 池子加超时
             let call_with_timeout =
@@ -855,9 +878,6 @@ async fn update_all_pools(
                     if pre_updates.is_empty() {
                         return;
                     }
-
-                    // [LOG] Start Step 1
-                    info!("[Chunk {}] Step 1: Fetching Slot0/Liq for {} pools...", chunk_idx, chunk_owned.len());
 
                     // 执行 Call 1
                     let results_1 = match multicall.call_raw().await {
@@ -957,9 +977,6 @@ async fn update_all_pools(
                         return;
                     }
 
-                    // [LOG] Start Step 2
-                    info!("[Chunk {}] Step 2: Fetching Bitmaps...", chunk_idx);
-
                     // 执行 Call 2
                     let results_2 = match multicall_2.call_raw().await {
                         Ok(r) => r,
@@ -1029,10 +1046,6 @@ async fn update_all_pools(
                         });
                     }
 
-                    // [LOG] Start Step 3 (CRITICAL)
-                    // 这里最重要：如果 ticks_call_count 很大（比如 > 1000），节点就会在这里卡住
-                    info!("[Chunk {}] Step 3: Fetching {} Ticks detail...", chunk_idx, ticks_call_count);
-
                     // 执行 Call 3
                     let results_3 = if ticks_call_count == 0 {
                         Vec::new()
@@ -1045,8 +1058,6 @@ async fn update_all_pools(
                             }
                         }
                     };
-
-                    info!("[Chunk {}] Step 3 Done. Processing results...", chunk_idx);
 
                     // === Final Step: Update Cache ===
                     let mut res3_idx = 0;
@@ -1099,8 +1110,6 @@ async fn update_all_pools(
                             },
                         );
                     }
-                    
-                    info!("[Chunk {}] FINISHED.", chunk_idx);
                 }
             })
             .await;
@@ -1881,15 +1890,18 @@ async fn main() -> Result<()> {
         };
         let current_bn = block.number.unwrap();
         let block_number = current_bn.as_u64();
+        let loop_start_time = std::time::Instant::now();
 
         info!("Block {}: Syncing pool states...", block_number);
         
+        let sync_start_time = std::time::Instant::now();
         // [修改] 使用 tokio::time::timeout 包裹 update_all_pools
         // 如果同步超过 6 秒还没完成，强制停止并跳过，进入下一个区块逻辑
         let sync_result = tokio::time::timeout(
             Duration::from_secs(6), 
             update_all_pools(provider.clone(), &active_pools_config, cache.clone(), current_bn)
         ).await;
+        let sync_duration = sync_start_time.elapsed();
 
         if let Err(_) = sync_result {
             warn!("⚠️ Sync TIMEOUT for Block {}. Skipping to keep alive.", block_number);
@@ -1921,37 +1933,52 @@ async fn main() -> Result<()> {
         }
 
         let total_candidates = candidates.len();
-        let ok_paths = Arc::new(AtomicUsize::new(0));
-        let profitable_paths = Arc::new(AtomicUsize::new(0));
-        let _failed_paths = Arc::new(AtomicUsize::new(0));
-        // [新增] 计数器，用于显示进度
         let processed_count = Arc::new(AtomicUsize::new(0));
 
+        // [新增] 统计计数器
+        let skip_liq_zero = Arc::new(AtomicUsize::new(0));   // 因流动性为0跳过
+        let skip_pre_calc = Arc::new(AtomicUsize::new(0));   // 因预计算亏损跳过
+        let skip_optimizer = Arc::new(AtomicUsize::new(0));  // 优化器没找到利润
+
+        let ok_paths = Arc::new(AtomicUsize::new(0));
+        let profitable_paths = Arc::new(AtomicUsize::new(0));
+        
+        // Clone Arcs
         let ok_paths_ref = ok_paths.clone();
         let profitable_paths_ref = profitable_paths.clone();
-        // let pool_failures_ref = pool_failures.clone(); // Unused in this updated block
         let all_pools_ref = all_pools_arc.clone();
+        let client_clone = client.clone();
+        let cache_clone = cache.clone();
+        let provider_clone = provider.clone();
         let flash_loan_tokens_ref = flash_loan_tokens.clone();
-        let processed_count_ref = processed_count.clone(); // Clone for async block
+        let processed_count_ref = processed_count.clone();
+        
+        let skip_liq_zero_ref = skip_liq_zero.clone();
+        let skip_pre_calc_ref = skip_pre_calc.clone();
+        let skip_optimizer_ref = skip_optimizer.clone();
 
+        let calc_start_time = std::time::Instant::now();
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
-        // [修改] 将并发度从 500 降低到 64。
-        stream::iter(candidates.clone())
+        // [优化] 使用 iter().cloned() 避免深拷贝整个 Vec，减少内存分配压力
+        stream::iter(candidates.iter().cloned())
             .for_each_concurrent(64, |path| {
                 let ok_paths = ok_paths_ref.clone();
                 let profitable_paths = profitable_paths_ref.clone();
-                let client = client_ref.clone();
+                let client = client_clone.clone();
                 let all_pools = all_pools_ref.clone();
-                // Clone Arcs for the async block
-                let cache = cache.clone();
-                let provider = provider.clone();
+                let cache = cache_clone.clone();
+                let provider = provider_clone.clone();
                 let flash_loan_tokens = flash_loan_tokens_ref.clone();
                 let processed_ref = processed_count_ref.clone();
+                
+                let skip_liq = skip_liq_zero_ref.clone();
+                let skip_pre = skip_pre_calc_ref.clone();
+                let skip_opt = skip_optimizer_ref.clone();
 
                 async move {
-                    // [新增] 进度打印：每完成 100 条路径打印一次
+                    // [新增] 进度打印：每完成 2000 条路径打印一次
                     let current_count = processed_ref.fetch_add(1, Ordering::Relaxed);
-                    if current_count % 100 == 0 && current_count > 0 {
+                    if current_count % 2000 == 0 && current_count > 0 {
                         info!("Calculated {} / {} paths...", current_count, total_candidates);
                     }
 
@@ -1962,14 +1989,17 @@ async fn main() -> Result<()> {
                             if let Some(state) = cache.get(&addr) {
                                 // 如果是 V3 且流动性为 0，跳过
                                 if pool.protocol != 1 && state.liquidity == 0 {
+                                    skip_liq.fetch_add(1, Ordering::Relaxed);
                                     return;
                                 }
                                 // 如果是 V2 且储备量极低，跳过 (简单判断 reserve0)
                                 if pool.protocol == 1 && state.reserve0 < 1_000_000 { // 随意设个阈值
+                                    skip_liq.fetch_add(1, Ordering::Relaxed);
                                     return;
                                 }
                             } else {
                                 // 如果缓存里没有数据，跳过
+                                skip_liq.fetch_add(1, Ordering::Relaxed);
                                 return;
                             }
                         }
@@ -2047,6 +2077,7 @@ async fn main() -> Result<()> {
 
                         // 如果试算结果亏损（输出 <= 输入），直接放弃，不要进 GSS
                         if !feasible || dummy_out <= pre_check_amount {
+                            skip_pre.fetch_add(1, Ordering::Relaxed);
                             return;
                         }
                     }
@@ -2088,6 +2119,7 @@ async fn main() -> Result<()> {
                                     verified_profit = new_profit;
                                 } else {
                                     // 重算后发现不盈利了（说明之前是幻觉）
+                                    skip_pre.fetch_add(1, Ordering::Relaxed);
                                     return;
                                 }
                             } else {
@@ -2292,19 +2324,58 @@ async fn main() -> Result<()> {
                                     Err(e) => error!("Tx Failed: {:?}", e),
                                 }
                             });
+                        } else {
+                            // 毛利 > 0 但净利 < 0 (亏本)
+                            skip_pre.fetch_add(1, Ordering::Relaxed);
                         }
+                    } else {
+                        skip_opt.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             })
             .await;
+        let calc_duration = calc_start_time.elapsed();
+        let total_duration = loop_start_time.elapsed();
 
-        let gas_gwei = format_units(gas_price, "gwei").unwrap_or_else(|_| "0.0".to_string());
+        let profit_val = profitable_paths.load(Ordering::Relaxed);
+        let total_ms_val = total_duration.as_millis();
+
+        // [新增] 收集并异步写入指标
+        let metrics = BlockMetrics {
+            block_number,
+            timestamp: Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+            sync_ms: sync_duration.as_millis(),
+            calc_ms: calc_duration.as_millis(),
+            total_ms: total_ms_val,
+            total_paths: total_candidates,
+            skip_liq: skip_liq_zero.load(Ordering::Relaxed),
+            skip_pre: skip_pre_calc.load(Ordering::Relaxed),
+            skip_opt: skip_optimizer.load(Ordering::Relaxed),
+            profit: profit_val,
+        };
+        
+        // [优化] 抽样打点：防止日志文件过大
+        // 策略：每 20 个区块记录一次，或者有利润/耗时过长时强制记录
+        if block_number % 20 == 0 || profit_val > 0 || total_ms_val > 1000 {
+            // 放入 blocking 线程写入文件，避免阻塞异步运行时
+            let metrics_clone = metrics.clone();
+            tokio::task::spawn_blocking(move || {
+                append_metrics(&metrics_clone);
+            });
+        }
+
+        // [统计打印]
         info!(
-            "Block {} | Gas: {} gwei | Cands: {} | Profitable: {}",
+            "Block {} Stats | Time: {}ms (Sync: {}ms, Calc: {}ms) | Total: {} | NoLiq: {} | Loss: {} | OptFail: {} | PROFIT: {}",
             current_bn,
-            gas_gwei,
+            metrics.total_ms,
+            metrics.sync_ms,
+            metrics.calc_ms,
             total_candidates,
-            profitable_paths.load(Ordering::Relaxed)
+            metrics.skip_liq,
+            metrics.skip_pre,
+            metrics.skip_opt,
+            metrics.profit
         );
     }
 
