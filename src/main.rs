@@ -136,6 +136,7 @@ struct BlockMetrics {
     skip_pre: usize,
     skip_opt: usize,
     skip_honeypot: usize,
+    skip_high_roi: usize,
     profit: usize,
 }
 
@@ -1941,6 +1942,7 @@ async fn main() -> Result<()> {
         let skip_pre_calc = Arc::new(AtomicUsize::new(0));   // 因预计算亏损跳过
         let skip_optimizer = Arc::new(AtomicUsize::new(0));  // 优化器没找到利润
         let skip_honeypot = Arc::new(AtomicUsize::new(0));   // 因利润过大或输入过大跳过
+        let skip_high_roi = Arc::new(AtomicUsize::new(0));   // [新增] 因 ROI 过高跳过
 
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let profitable_paths = Arc::new(AtomicUsize::new(0));
@@ -1959,6 +1961,7 @@ async fn main() -> Result<()> {
         let skip_pre_calc_ref = skip_pre_calc.clone();
         let skip_optimizer_ref = skip_optimizer.clone();
         let skip_honeypot_ref = skip_honeypot.clone();
+        let skip_high_roi_ref = skip_high_roi.clone();
 
         let calc_start_time = std::time::Instant::now();
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
@@ -1978,6 +1981,7 @@ async fn main() -> Result<()> {
                 let skip_pre = skip_pre_calc_ref.clone();
                 let skip_opt = skip_optimizer_ref.clone();
                 let skip_honeypot = skip_honeypot_ref.clone();
+                let skip_roi = skip_high_roi_ref.clone();
 
                 async move {
                     // [新增] 进度打印：每完成 2000 条路径打印一次
@@ -2128,6 +2132,21 @@ async fn main() -> Result<()> {
                         if best_amount > max_input_limit {
                              skip_honeypot.fetch_add(1, Ordering::Relaxed);
                              return;
+                        }
+
+                        // ========================================================
+                        // 🛑 [新增] 利润率 (ROI) 过滤器
+                        // ========================================================
+                        // 逻辑：如果 (利润 * 100 / 投入) > 10，说明利润率超过 10%
+                        // 正常的套利利润率通常 < 1%。超过 10% 极大概率是税收币陷阱。
+                        if !best_amount.is_zero() && best_gross_profit > I256::zero() {
+                            let profit_u256 = U256::from(best_gross_profit.as_u128());
+                            let roi_percent = (profit_u256 * U256::from(100)) / best_amount;
+                            
+                            if roi_percent > U256::from(10) {
+                                skip_roi.fetch_add(1, Ordering::Relaxed);
+                                return;
+                            }
                         }
 
                         // [核心修复] 二次校验：发现机会后，强制同步链上真实 Tick 数据
@@ -2386,6 +2405,7 @@ async fn main() -> Result<()> {
             skip_pre: skip_pre_calc.load(Ordering::Relaxed),
             skip_opt: skip_optimizer.load(Ordering::Relaxed),
             skip_honeypot: skip_honeypot.load(Ordering::Relaxed),
+            skip_high_roi: skip_high_roi.load(Ordering::Relaxed),
             profit: profit_val,
         };
         
@@ -2401,7 +2421,7 @@ async fn main() -> Result<()> {
 
         // [统计打印]
         info!(
-            "Block {} Stats | Time: {}ms (Sync: {}ms, Calc: {}ms) | Total: {} | NoLiq: {} | Loss: {} | OptFail: {} | Honey: {} | PROFIT: {}",
+            "Block {} Stats | Time: {}ms (Sync: {}ms, Calc: {}ms) | Total: {} | NoLiq: {} | Loss: {} | OptFail: {} | Honey: {} | ROI: {} | PROFIT: {}",
             current_bn,
             metrics.total_ms,
             metrics.sync_ms,
@@ -2411,6 +2431,7 @@ async fn main() -> Result<()> {
             metrics.skip_pre,
             metrics.skip_opt,
             metrics.skip_honeypot,
+            metrics.skip_high_roi,
             metrics.profit
         );
     }
