@@ -135,6 +135,7 @@ struct BlockMetrics {
     skip_liq: usize,
     skip_pre: usize,
     skip_opt: usize,
+    skip_honeypot: usize,
     profit: usize,
 }
 
@@ -1939,6 +1940,7 @@ async fn main() -> Result<()> {
         let skip_liq_zero = Arc::new(AtomicUsize::new(0));   // 因流动性为0跳过
         let skip_pre_calc = Arc::new(AtomicUsize::new(0));   // 因预计算亏损跳过
         let skip_optimizer = Arc::new(AtomicUsize::new(0));  // 优化器没找到利润
+        let skip_honeypot = Arc::new(AtomicUsize::new(0));   // 因利润过大或输入过大跳过
 
         let ok_paths = Arc::new(AtomicUsize::new(0));
         let profitable_paths = Arc::new(AtomicUsize::new(0));
@@ -1956,6 +1958,7 @@ async fn main() -> Result<()> {
         let skip_liq_zero_ref = skip_liq_zero.clone();
         let skip_pre_calc_ref = skip_pre_calc.clone();
         let skip_optimizer_ref = skip_optimizer.clone();
+        let skip_honeypot_ref = skip_honeypot.clone();
 
         let calc_start_time = std::time::Instant::now();
         // 核心修改逻辑：使用 GSS 替代 test_sizes，并集成 execute_transaction
@@ -1974,6 +1977,7 @@ async fn main() -> Result<()> {
                 let skip_liq = skip_liq_zero_ref.clone();
                 let skip_pre = skip_pre_calc_ref.clone();
                 let skip_opt = skip_optimizer_ref.clone();
+                let skip_honeypot = skip_honeypot_ref.clone();
 
                 async move {
                     // [新增] 进度打印：每完成 2000 条路径打印一次
@@ -2096,6 +2100,36 @@ async fn main() -> Result<()> {
                     if let Some((best_amount, best_gross_profit)) = best_result {
                         ok_paths.fetch_add(1, Ordering::Relaxed);
                         
+                        // ==========================================
+                        // 🛑 [新增] 垃圾/蜜罐过滤器
+                        // ==========================================
+                        
+                        // 1. 利润过大检查 (Too Good To Be True)
+                        let max_reasonable_profit = if start_token == weth {
+                            parse_ether("0.5").unwrap() // 0.5 ETH
+                        } else if start_token == usdc || start_token == usdbc {
+                            parse_units("1500", 6).unwrap().into() // 1500 USDC
+                        } else {
+                            U256::max_value()
+                        };
+
+                        if best_gross_profit > I256::from_raw(max_reasonable_profit) {
+                            skip_honeypot.fetch_add(1, Ordering::Relaxed);
+                            return; 
+                        }
+
+                        // 2. 输入金额过大检查 (Liquidity Safety)
+                        let max_input_limit = if start_token == weth {
+                             parse_ether("2.0").unwrap() // 只允许最大 2 ETH 的套利
+                        } else {
+                             U256::max_value()
+                        };
+
+                        if best_amount > max_input_limit {
+                             skip_honeypot.fetch_add(1, Ordering::Relaxed);
+                             return;
+                        }
+
                         // [核心修复] 二次校验：发现机会后，强制同步链上真实 Tick 数据
                         // 防止因 Bitmap 缺失导致的“无限流动性”幻觉
                         let mut verified_profit = best_gross_profit;
@@ -2351,6 +2385,7 @@ async fn main() -> Result<()> {
             skip_liq: skip_liq_zero.load(Ordering::Relaxed),
             skip_pre: skip_pre_calc.load(Ordering::Relaxed),
             skip_opt: skip_optimizer.load(Ordering::Relaxed),
+            skip_honeypot: skip_honeypot.load(Ordering::Relaxed),
             profit: profit_val,
         };
         
@@ -2366,7 +2401,7 @@ async fn main() -> Result<()> {
 
         // [统计打印]
         info!(
-            "Block {} Stats | Time: {}ms (Sync: {}ms, Calc: {}ms) | Total: {} | NoLiq: {} | Loss: {} | OptFail: {} | PROFIT: {}",
+            "Block {} Stats | Time: {}ms (Sync: {}ms, Calc: {}ms) | Total: {} | NoLiq: {} | Loss: {} | OptFail: {} | Honey: {} | PROFIT: {}",
             current_bn,
             metrics.total_ms,
             metrics.sync_ms,
@@ -2375,6 +2410,7 @@ async fn main() -> Result<()> {
             metrics.skip_liq,
             metrics.skip_pre,
             metrics.skip_opt,
+            metrics.skip_honeypot,
             metrics.profit
         );
     }
