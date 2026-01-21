@@ -1472,7 +1472,6 @@ async fn main() -> Result<()> {
     let config = load_encrypted_config()?;
     let provider = Arc::new(Provider::<Ipc>::connect_ipc(&config.ipc_path).await?);
     let wallet = LocalWallet::from_str(&config.private_key)?.with_chain_id(8453u64);
-    println!("wallet: {}", &config.private_key);
     let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
     let gas_manager = Arc::new(SharedGasManager::new("gas_state.json".to_string()));
     let pool_failures: Arc<DashMap<String, u32>> = Arc::new(DashMap::new());
